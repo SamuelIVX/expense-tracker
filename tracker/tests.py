@@ -285,8 +285,7 @@ class FrontendDesignSystemTests(TestCase):
         """POST /logout/ terminates user session and redirects to login."""
         self.client.force_login(self.user)
         response = self.client.post(reverse('logout'))
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('login'))
+        self.assertRedirects(response, reverse('login'), fetch_redirect_response=False)
 
         # Verify session is flushed and user is unauthenticated
         response_check = self.client.get(reverse('index'))
@@ -297,12 +296,15 @@ class FrontendDesignSystemTests(TestCase):
         protected_routes = ['dashboard', 'add_transaction', 'transaction_history']
         public_routes = ['login', 'register']
 
-        # Unauthenticated: protected routes redirect to login
+        # Unauthenticated: protected routes redirect to login with next parameter
         for route_name in protected_routes:
             url = reverse(route_name)
             response = self.client.get(url)
-            self.assertEqual(response.status_code, 302)
-            self.assertIn(reverse('login'), response.url)
+            self.assertRedirects(
+                response,
+                f"{reverse('login')}?next={url}",
+                fetch_redirect_response=False,
+            )
 
         # Authenticated: protected routes return HTTP 200
         self.client.force_login(self.user)
