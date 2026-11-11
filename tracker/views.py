@@ -8,7 +8,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from .forms import RegisterForm
+from .forms import RegisterForm, TransactionForm
 
 def index(request):
     """
@@ -21,18 +21,35 @@ def index(request):
 
 @login_required
 def dashboard_view(request):
-    """Protected view for dashboard (implemented in Spec 06)."""
-    return HttpResponse("Expense Tracker — Dashboard.", status=200)
+    """Protected view for dashboard (full metrics implemented in Spec 06)."""
+    return render(request, 'tracker/dashboard.html')
 
 @login_required
 def add_transaction_view(request):
-    """Protected view for add transaction (implemented in Spec 05)."""
-    return HttpResponse("Expense Tracker — Add Expense.", status=200)
+    """
+    Renders and processes the expense transaction entry form.
+    Associates the newly created transaction with the authenticated user.
+    """
+    if request.method == 'POST':
+        form = TransactionForm(request.POST)
+        if form.is_valid():
+            transaction_obj = form.save(commit=False)
+            transaction_obj.user = request.user
+            transaction_obj.save()
+            messages.success(
+                request,
+                f"Added expense: ${transaction_obj.amount:.2f} for {transaction_obj.category.name}."
+            )
+            return redirect('transaction_history')
+    else:
+        form = TransactionForm()
+
+    return render(request, 'tracker/add_transaction.html', {'form': form})
 
 @login_required
 def transaction_history_view(request):
-    """Protected view for transaction history (implemented in Spec 07)."""
-    return HttpResponse("Expense Tracker — History.", status=200)
+    """Protected view for transaction history (full filters implemented in Spec 07)."""
+    return render(request, 'tracker/history.html')
 
 def register_view(request):
     """

@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Expense — Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="et-card et-form-card">
+    <div class="et-card__header">
+        <h1 class="et-card__title">Add New Expense</h1>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="et-alert et-alert--error" role="alert">
+            {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'add_transaction' %}" class="et-form">
+        {% csrf_token %}
+
+        <div class="et-form__group">
+            <label for="{{ form.category.id_for_label }}" class="et-label">Category</label>
+            {{ form.category }}
+            {% if form.category.errors %}
+                <span class="et-form__error" id="{{ form.category.id_for_label }}-error" role="alert">
+                    {% for error in form.category.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="et-form__group">
+            <label for="{{ form.amount.id_for_label }}" class="et-label">Amount ($)</label>
+            {{ form.amount }}
+            {% if form.amount.errors %}
+                <span class="et-form__error" id="{{ form.amount.id_for_label }}-error" role="alert">
+                    {% for error in form.amount.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="et-form__group">
+            <label for="{{ form.tx_date.id_for_label }}" class="et-label">Date</label>
+            {{ form.tx_date }}
+            {% if form.tx_date.errors %}
+                <span class="et-form__error" id="{{ form.tx_date.id_for_label }}-error" role="alert">
+                    {% for error in form.tx_date.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="et-form__group">
+            <label for="{{ form.note.id_for_label }}" class="et-label">Description / Note (Optional)</label>
+            {{ form.note }}
+            {% if form.note.help_text %}
+                <span class="et-form__help" id="{{ form.note.id_for_label }}-help">{{ form.note.help_text }}</span>
+            {% endif %}
+            {% if form.note.errors %}
+                <span class="et-form__error" id="{{ form.note.id_for_label }}-error" role="alert">
+                    {% for error in form.note.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="et-form__actions">
+            <button type="submit" class="et-btn et-btn--primary">Save Expense</button>
+            <a href="{% url 'dashboard' %}" class="et-btn et-btn--secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

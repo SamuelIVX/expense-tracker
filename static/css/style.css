@@ -330,6 +330,12 @@ a:hover {
     margin-right: auto;
 }
 
+.et-form-card {
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 /* ==========================================================================
    6. Components: Buttons
    ========================================================================== */
@@ -487,6 +493,12 @@ a:hover {
     color: var(--et-danger);
     font-weight: 500;
     margin-top: var(--et-space-xs);
+}
+
+.et-form__actions {
+    display: flex;
+    gap: var(--et-space-sm);
+    margin-top: var(--et-space-lg);
 }
 
 /* ==========================================================================

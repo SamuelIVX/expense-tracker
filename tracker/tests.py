@@ -5,6 +5,7 @@ Tests for tracker application infrastructure, models, and commands.
 from decimal import Decimal
 from datetime import date
 from pathlib import Path
+from django.utils import timezone
 from django.test import SimpleTestCase, TestCase, RequestFactory
 from django.urls import reverse
 from django.conf import settings
@@ -435,3 +436,124 @@ class UserAuthenticationTests(TestCase):
         for route_name in ['login', 'register']:
             response = self.client.get(reverse(route_name))
             self.assertRedirects(response, reverse('dashboard'), fetch_redirect_response=False)
+
+class AddTransactionViewTests(TestCase):
+    """Verifies Spec 05 Add Transaction form, validation, security binding, and view handling."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="ValidPass123!")
+        self.other_user = User.objects.create_user(username="otheruser", password="ValidPass123!")
+        self.category = Category.objects.create(name="Groceries", color="#2ECC71")
+
+    def test_unauthenticated_user_redirected_to_login(self):
+        """Anonymous access to GET or POST /add/ redirects to login with next parameter."""
+        add_url = reverse('add_transaction')
+        for method in ['get', 'post']:
+            client_fn = getattr(self.client, method)
+            response = client_fn(add_url)
+            self.assertRedirects(response, f"{reverse('login')}?next={add_url}", fetch_redirect_response=False)
+
+    def test_get_add_transaction_renders_form_with_defaults(self):
+        """Logged-in user sees add transaction form with today's date and available categories."""
+        fixed_today = date(2026, 11, 10)
+        with patch('django.utils.timezone.localdate', return_value=fixed_today):
+            self.client.force_login(self.user)
+            response = self.client.get(reverse('add_transaction'))
+            self.assertEqual(response.status_code, 200)
+            self.assertTemplateUsed(response, 'tracker/add_transaction.html')
+            self.assertContains(response, "Add New Expense")
+            self.assertContains(response, f'value="{fixed_today.isoformat()}"')
+            self.assertContains(response, "Groceries")
+
+    def test_post_valid_transaction_creates_record_for_user(self):
+        """Valid submission persists transaction belonging to the logged-in user and redirects."""
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+        response = self.client.post(reverse('add_transaction'), {
+            'category': self.category.id,
+            'amount': '45.50',
+            'tx_date': today.isoformat(),
+            'note': 'Trader Joe run',
+        }, follow=True)
+        self.assertRedirects(response, reverse('transaction_history'))
+        self.assertContains(response, "Added expense: $45.50 for Groceries.")
+        self.assertTemplateUsed(response, 'tracker/history.html')
+
+        self.assertEqual(Transaction.objects.count(), 1)
+        tx = Transaction.objects.first()
+        self.assertEqual(tx.user, self.user)
+        self.assertEqual(tx.category, self.category)
+        self.assertEqual(tx.amount, Decimal('45.50'))
+        self.assertEqual(tx.note, 'Trader Joe run')
+        self.assertEqual(tx.tx_date, today)
+
+    def test_post_transaction_cannot_spoof_different_user(self):
+        """Submitting another user_id does not assign the transaction to that user."""
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+        response = self.client.post(reverse('add_transaction'), {
+            'category': self.category.id,
+            'amount': '20.00',
+            'tx_date': today.isoformat(),
+            'note': 'Spoof attempt',
+            'user': self.other_user.id,
+            'user_id': self.other_user.id,
+        })
+        self.assertRedirects(response, reverse('transaction_history'), fetch_redirect_response=False)
+
+        tx = Transaction.objects.first()
+        self.assertEqual(tx.user, self.user)
+        self.assertNotEqual(tx.user, self.other_user)
+
+    def test_post_invalid_amount_rejected(self):
+        """Zero, negative, overflow, and excessive precision amounts are rejected by validation."""
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+        for invalid_amount in ['0.00', '-15.50', '0', '1000000.00', '10.001']:
+            response = self.client.post(reverse('add_transaction'), {
+                'category': self.category.id,
+                'amount': invalid_amount,
+                'tx_date': today.isoformat(),
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('form', response.context)
+            self.assertIn('amount', response.context['form'].errors)
+            self.assertEqual(Transaction.objects.count(), 0)
+
+    def test_post_invalid_category_rejected(self):
+        """Invalid category ID fails validation and does not save transaction."""
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+        response = self.client.post(reverse('add_transaction'), {
+            'category': 99999,
+            'amount': '30.00',
+            'tx_date': today.isoformat(),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('category', response.context['form'].errors)
+        self.assertEqual(Transaction.objects.count(), 0)
+
+    def test_post_whitespace_note_normalized_to_none(self):
+        """Whitespace-only notes are normalized to None."""
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+        response = self.client.post(reverse('add_transaction'), {
+            'category': self.category.id,
+            'amount': '12.00',
+            'tx_date': today.isoformat(),
+            'note': '   ',
+        })
+        self.assertRedirects(response, reverse('transaction_history'), fetch_redirect_response=False)
+        tx = Transaction.objects.first()
+        self.assertIsNone(tx.note)
+
+    def test_post_invalid_form_renders_accessible_aria_attributes(self):
+        """Invalid fields are marked with aria-invalid='true' and linked to error element ids."""
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('add_transaction'), {
+            'amount': '-5.00',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'aria-invalid="true"')
+        self.assertContains(response, 'aria-describedby="id_amount-error"')
+        self.assertContains(response, 'id="id_amount-error"')
