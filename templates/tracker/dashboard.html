@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard — Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="et-page-header">
+    <h1 class="et-card__title" style="font-size: 1.5rem; margin-bottom: var(--et-space-sm);">Dashboard</h1>
+    <p style="color: var(--et-text-muted); margin-bottom: var(--et-space-lg);">Welcome back, {{ user.username }}. Your spending overview will appear here.</p>
+</div>
+<div class="et-card">
+    <p style="margin: 0; color: var(--et-text-muted);">Dashboard analytics and budget progress will be active shortly.</p>
+</div>
+{% endblock %}
