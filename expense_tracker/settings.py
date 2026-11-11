@@ -97,9 +97,18 @@ SUPPORTED_ENGINES = {
     },
 }
 
-DB_ENGINE = os.environ.get('DB_ENGINE', 'django.db.backends.mysql')
+_raw_engine = os.environ.get('DB_ENGINE', 'django.db.backends.mysql').strip().lower()
+if _raw_engine in ('mysql', 'django.db.backends.mysql'):
+    DB_ENGINE = 'django.db.backends.mysql'
+elif _raw_engine in ('sqlite', 'sqlite3', 'django.db.backends.sqlite3'):
+    DB_ENGINE = 'django.db.backends.sqlite3'
+else:
+    DB_ENGINE = os.environ.get('DB_ENGINE', 'django.db.backends.mysql')
+
 if DB_ENGINE not in SUPPORTED_ENGINES:
-    raise ImproperlyConfigured(f"Unsupported DB_ENGINE '{DB_ENGINE}'. Must be one of: {list(SUPPORTED_ENGINES.keys())}")
+    raise ImproperlyConfigured(
+        f"Unsupported DB_ENGINE '{os.environ.get('DB_ENGINE')}'. Must be one of: ['sqlite', 'mysql', 'django.db.backends.sqlite3', 'django.db.backends.mysql']"
+    )
 
 DATABASES = {
     'default': {

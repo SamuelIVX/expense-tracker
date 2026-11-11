@@ -1,10 +1,9 @@
 -- CSC 226 - Web Database Applications
 -- Expense Tracker Schema (MySQL 8.0+)
--- Satisfies the 20% Database Design coursework requirement.
 --
 -- STANDALONE REFERENCE SCRIPT:
 -- This script contains raw MySQL 8.0 DDL documenting the normalized 3NF relational
--- schema, indices, foreign-key cascades, and constraint checks for grading review.
+-- schema, indices, foreign-key cascades, and constraint checks.
 --
 -- OPERATIONAL NOTES & DJANGO INTEGRATION:
 -- 1. In production and local development, schema migrations are automatically managed
@@ -30,7 +29,7 @@ CREATE TABLE IF NOT EXISTS tracker_category (
 -- 2. Transaction Table
 CREATE TABLE IF NOT EXISTS tracker_transaction (
     id          BIGINT         AUTO_INCREMENT PRIMARY KEY,
-    user_id     BIGINT         NOT NULL,
+    user_id     INT            NOT NULL,
     category_id BIGINT         NOT NULL,
     amount      DECIMAL(10, 2) NOT NULL,
     note        VARCHAR(255)   NULL,

@@ -1,155 +1,257 @@
-# Expense Tracker
+# Personal Expense Tracker
 
-A web database application for logging and reviewing daily personal spending. Authenticated users
-can record transactions by amount, category, note, and date; browse and filter their history; and
-see a live spending dashboard that breaks down how much they've spent this month by category. The
-project is coursework for CSC 226 — Web Database Applications (Fall 2026) and is graded on
-database design (20%), user interface craftsmanship (10%), and full-stack integration / security / auth (20%).
+[![Build & Test](https://github.com/SamuelIVX/expense-tracker/actions/workflows/build.yml/badge.svg)](https://github.com/SamuelIVX/expense-tracker/actions/workflows/build.yml)
+[![Course](https://img.shields.io/badge/Course-CSC%20226%20Web%20Database%20Applications-blue)](https://www.csi.cuny.edu/)
+[![Python](https://img.shields.io/badge/Python-3.14-blue.svg)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)](https://www.mysql.com/)
+[![Tests](https://img.shields.io/badge/Tests-61%20Passing-brightgreen.svg)](tracker/tests.py)
 
-Stack: Python 3 + Django 5 (backend), MySQL (local database via MySQL Workbench), vanilla HTML + CSS + JavaScript (Django templates).
-Group size: 2–3. No heavy frontend framework (React/Vue/Tailwind off-limits). Chart.js via CDN as stretch only.
+A secure, database-driven web application for tracking and analyzing personal daily expenditures. Built for **CSC 226: Web Database Applications** (Fall 2026), this application allows authenticated users to log expenses, monitor monthly spending targets with a dynamic budget progress bar, visualize category breakdowns using an interactive Chart.js bar chart, and filter past transaction history.
 
----
-
-## Domain Glossary
-
-| Term | Definition |
-|---|---|
-| **User** | An authenticated account managed via `django.contrib.auth.models.User`; owns all their own transactions. |
-| **Category** | A named spending bucket (Food, Transport, Housing, etc.) with a display color. Seeded at deploy time. |
-| **Transaction** | One recorded expense: an amount (`DECIMAL(10,2)`), a category FK, an optional note, and a transaction date. Belongs to exactly one User. |
-| **Budget** | A monthly spending cap ($500 default in v1) compared against the current month's transaction totals on the dashboard. |
-| **Dashboard** | The landing page after login (`/dashboard/`). Shows the current month's total spend, budget progress bar, and a per-category breakdown. |
-| **History** | A filterable list of all a user's past transactions (`/history/`), newest first, with delete controls. |
+The application demonstrates proficiency in **Relational Database Design**, **User Interface Craftsmanship**, and **Full-Stack Integration, Security & Authentication**.
 
 ---
 
-## Skill Integration Matrix
-
-To ensure industry-grade quality and strict rubric compliance, each spec binds to specialized domain skills:
-
-| Skill | Focus Areas | Applied Specs |
-|---|---|---|
-| **`owasp-security`** | Password hashing (PBKDF2), SQL injection prevention (`%s` DB-API), IDOR prevention, CSRF tokens, session hardening, CDN Subresource Integrity (SRI). | `01`, `04`, `05`, `06`, `07`, `08` |
-| **`better-accessibility`** | WCAG 2.2 AA compliance: `:focus-visible` outlines, `prefers-reduced-motion`, `role="progressbar"`, `aria-describedby` form errors, `scope="col"` table headers, row-specific `aria-label`s. | `03`, `05`, `06`, `07` |
-| **`better-ui`** | Semantic CSS custom properties (tokens), layout spacing, loading button states, progress bar transitions. | `03`, `06` |
-| **`better-writing`** | Non-punitive, clear, actionable interface copy; descriptive button labels; empty state guidance. | `03`, `04`, `05`, `06`, `07`, `09` |
-| **`codebase-design`** | Normalized 3NF schema, cascade constraints, composite indexing (`idx_tx_user_date`), clean contract seams. | `01`, `02`, `06` |
+## Table of Contents
+- [Tech Stack & Architecture](#tech-stack--architecture)
+- [Core Technical Pillars](#core-technical-pillars)
+- [Feature Checklist](#feature-checklist)
+- [Database Schema (3NF)](#database-schema-3nf)
+- [Setup & Installation Guide](#setup--installation-guide)
+- [Running Automated Tests](#running-automated-tests)
 
 ---
 
-## Specs (Dependency Order)
+## Tech Stack & Architecture
 
-| # | Spec | Who | Applicable Skills | One-Line Summary |
-|---|------|-----|-------------------|-----------------|
-| 01 | [`docs/specs/active/01-project-scaffold.md`](docs/specs/active/01-project-scaffold.md) | You | `owasp-security`, `codebase-design` | Git repo init, venv, Django skeleton, `.env`, `.gitignore`, MySQL `pymysql` driver setup. |
-| 02 | [`docs/specs/active/02-database-schema.md`](docs/specs/active/02-database-schema.md) | You | `codebase-design` | MySQL DDL (`schema.sql`) for Workbench + Django Models (`Category`, `Transaction`) + seed data. |
-| 03 | [`docs/specs/active/03-frontend-design-system.md`](docs/specs/active/03-frontend-design-system.md) | Teammates | `better-accessibility`, `better-ui`, `better-writing` | CSS design tokens (`style.css`), base Django template (`base.html`), UI transitions, loading states. |
-| 04 | [`docs/specs/active/04-user-auth.md`](docs/specs/active/04-user-auth.md) | You | `owasp-security`, `better-writing` | Django built-in auth (`LoginView`, `LogoutView`), registration form, `@login_required` enforcement. |
-| 05 | [`docs/specs/active/05-add-transaction.md`](docs/specs/active/05-add-transaction.md) | Teammate | `better-accessibility`, `owasp-security`, `better-writing` | Add expense form with client/server validation, CSRF tokens, and user ownership assignment. |
-| 06 | [`docs/specs/active/06-dashboard.md`](docs/specs/active/06-dashboard.md) | You | `owasp-security`, `better-accessibility`, `better-ui` | Current month aggregation via raw parameterized SQL (`SUM`, `GROUP BY`, `JOIN`) + budget progress bar. |
-| 07 | [`docs/specs/active/07-transaction-history.md`](docs/specs/active/07-transaction-history.md) | Teammate | `owasp-security`, `better-accessibility`, `better-writing` | Filterable transaction table (by category and month), ownership-verified DELETE. |
-| 08 | [`docs/specs/active/08-stretch-chart.md`](docs/specs/active/08-stretch-chart.md) | Anyone | `owasp-security`, `better-ui` | Optional Chart.js CDN bar chart with SRI on the dashboard breakdown. |
-| 09 | [`docs/specs/active/09-submission.md`](docs/specs/active/09-submission.md) | You | `better-writing` | Final submission README, rubric checklist, `WALKTHROUGH.md`, and demo video script. |
-
----
-
-## Dependency Graph
+- **Backend:** Python 3.14 + Django 5.2 (Model-View-Template architecture, session-based authentication, CSRF middleware).
+- **Database:** MySQL 8.0 (InnoDB engine, 3NF schema, foreign key cascades/restrictions, decimal quantization, composite indexing). Connected to Django using `pymysql`.
+- **Frontend:** Semantic HTML5, Vanilla CSS3 Custom Properties (Design Tokens), and Vanilla JavaScript (loading states, double-submit guard, alert dismissal). *Zero heavy frontend frameworks (React/Vue/Tailwind) per project requirements.*
+- **Data Visualization (Stretch):** Chart.js 4.4.2 imported via CDN with Subresource Integrity (`integrity="sha256-..."`), offline guards, and safe JSON script embedding.
+- **Testing & Tooling:** Pytest, `pytest-django`, GitHub Actions CI.
 
 ```
-01 project scaffold
-        │
-        ▼
-02 database schema
-        │
-        ├──────────────────────────┐
-        ▼                          ▼
-03 frontend design system    04 user auth
-        │                          │
-        └────────────┬─────────────┘
-                     ▼
-              05 add transaction
-                     │
-                     ▼
-              06 dashboard
-                     │
-                     ▼
-              07 transaction history
-                     │
-              08 stretch chart (optional, branches from 06)
-                     │
-                     ▼
-              09 submission
+┌─────────────────────────────────────────────────────────────┐
+│                       Client Browser                        │
+│  - Semantic HTML5 & CSS Custom Properties Tokens            │
+│  - Vanilla JavaScript (Double-submit guard, loading state)  │
+│  - Chart.js 4.4.2 via CDN (Subresource Integrity Verified)  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTP / HTTPS (Session Cookie & CSRF)
+┌──────────────────────────────▼──────────────────────────────┐
+│                    Django 5.2 Application                   │
+│  - MVT Architecture (Views, Forms, Templates)               │
+│  - Built-in Session Auth & PBKDF2 Password Hashing          │
+│  - Strict Row-Level Data Isolation (request.user.id)        │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Parameterized SQL Queries (DB-API %s)
+┌──────────────────────────────▼──────────────────────────────┐
+│                       MySQL 8.0 Database                    │
+│  - 3NF Normalized Schema (`schema.sql`)                     │
+│  - Foreign Keys: `fk_tx_user` (CASCADE), `fk_tx_cat` (RESTRICT)
+│  - Check Constraint: `chk_amount_pos` ($0.01 - $999,999.99) │
+│  - Performance Index: `idx_tx_user_date (user_id, tx_date)`  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Cross-Spec Seams & Interface Registry
+## Core Technical Pillars
 
-| Shared Contract / Type / File | Canonical Owner Spec | Consumer Specs | Contract Stability |
-|---|---|---|---|
-| `expense_tracker/settings.py` | `01-project-scaffold` | `02`, `03`, `04` | Database connection, installed apps, static/template paths, security flags; frozen after 04 |
-| `schema.sql` (Workbench DDL) | `02-database-schema` | `09` (submission) | Normalized tables (`categories`, `transactions`), FKs, seed data; frozen after 02 |
-| `tracker/models.py` (`Category`, `Transaction`) | `02-database-schema` | `05`, `06`, `07` | Core data models; frozen after 02 |
-| `templates/base.html` | `03-frontend-design-system` | `04`, `05`, `06`, `07`, `08` | Base Jinja/Django layout, navbar, CSRF boilerplate, messages; frozen after 03 |
-| `static/css/style.css` | `03-frontend-design-system` | `04..08` | Design tokens (`--et-*`), component styles, progress bar, accessibility rules; frozen after 03 |
-| `static/js/ui.js` | `03-frontend-design-system` | `05`, `07` | Form submission spinner, button disable, toast dismissal |
-| `tracker/urls.py` | `01-project-scaffold` | `04`, `05`, `06`, `07` | App URL registry; 01 creates, subsequent specs append endpoints |
-| `@login_required` & user session | `04-user-auth` | `05`, `06`, `07` | Request user contract (`request.user.id`, `request.user.is_authenticated`) |
-| `category_breakdown` data shape | `06-dashboard` | `08-stretch-chart` | List of dicts `[{'name': str, 'total': float, 'color': str}]` passed to template and JSON serializer |
+The project is engineered around three foundational pillars:
 
----
+### 1. Database Design
+- **3NF Relational Normalization:** Complete separation of entity domains (`auth_user`, `tracker_category`, `tracker_transaction`), eliminating insertion, update, and deletion anomalies.
+- **Referential Integrity & Cascades:**
+  - `fk_tx_user`: References `auth_user(id)` (`INT`) with `ON DELETE CASCADE` in `schema.sql` and `on_delete=models.CASCADE` in Django ORM (deleting a user account cleans up all associated transactions).
+  - `fk_tx_category`: References `tracker_category(id)` with `ON DELETE RESTRICT` in `schema.sql` and `on_delete=models.PROTECT` in Django ORM (prevents deletion of categories currently referenced by active transactions).
+- **Domain Constraints & Monetary Types:**
+  - `DECIMAL(10, 2)` monetary columns throughout—guaranteeing exact cent precision and eliminating floating-point rounding errors.
+  - Database check constraint `chk_amount_pos` (`amount > 0.00 AND amount <= 999999.99`).
+- **Query Optimization Indexing:** Composite index `idx_tx_user_date (user_id, tx_date)` supporting high-performance date-window filtering and dashboard aggregation queries.
+- **Deliverables:** Raw MySQL DDL in [`schema.sql`](schema.sql) (executable in MySQL Workbench) mirroring Django ORM models in [`tracker/models.py`](tracker/models.py).
 
-## Time Estimates
+### 2. User Interface Design & Craftsmanship
+- **Design Tokens System:** Centralized CSS custom properties in [`static/css/style.css`](static/css/style.css) defining brand colors, typography, spacing, surface elevations, and responsive breakpoints.
+- **Accessibility (WCAG 2.2 AA Compliance):**
+  - High-contrast color palette meeting WCAG 2.2 AA (≥ 4.5:1 text-on-background ratio; distinct :focus-visible outlines on interactive controls).
+  - Visible `:focus-visible` outlines on all interactive elements.
+  - Screen reader support: `role="progressbar"`, `aria-valuenow`, `aria-describedby` form error bindings, and table column scopes (`scope="col"`).
+  - Respects `prefers-reduced-motion` media queries.
+- **Responsive Layout:** Adaptive desktop and mobile layouts (`.et-stat-grid`, `.et-grid`, `.et-table-responsive`).
+- **Interactive Feedback:** Dynamic submit button loading spinner (`static/js/ui.js`), double-submit prevention, and smooth alert toast dismissal.
+- **Dynamic Budget Pacing Indicator:** Visual progress bar that dynamically shifts color based on spending thresholds:
+  - Normal Blue (< 70% of budget)
+  - Amber Warning (70% – 89.9% of budget)
+  - Red Danger (≥ 90% of budget)
+- **Interactive Chart Visualization (Stretch):** Chart.js horizontal bar chart paired with an accessible data table (`aria-describedby="categoryBreakdownTable"` and internal screen-reader alternative).
 
-| Spec | Estimate |
-|---|---|
-| 01 project scaffold | ~1.5 hr |
-| 02 database schema | ~1.5 hr |
-| 03 frontend design system | ~2 hr |
-| 04 user auth | ~1.5 hr (simplified by Django `contrib.auth`) |
-| 05 add transaction | ~2 hr |
-| 06 dashboard | ~2 hr |
-| 07 transaction history | ~2 hr |
-| 08 stretch chart | ~1 hr (optional) |
-| 09 submission | ~1 hr |
-
-**Total:** ~14–15 hrs across the group (~5–7 hrs per person in a 2–3 person group).
-
----
-
-## Definition of Done
-
-- The app runs locally with `python manage.py runserver` inside an activated `.venv` with `.env` populated.
-- Connected to local MySQL instance (`127.0.0.1:3306`) using `pymysql`.
-- `schema.sql` executes cleanly in MySQL Workbench without errors.
-- A new user can register, log in, and log out; unauthenticated access to protected routes redirects to `/login/`.
-- Passwords stored as PBKDF2 hashes (Django default) — never plaintext.
-- A logged-in user can add a transaction (amount, category, date, optional note) and see it immediately in `/history/`.
-- The dashboard shows the current month's total spend and category breakdown calculated using **raw parameterized SQL queries** (`connection.cursor()`) to prove database query skills.
-- The dashboard includes an accessible budget progress bar (`role="progressbar"`, green < 80%, amber ≥ 80%, red ≥ 100%).
-- Transaction history is filterable by category and month (`?category=...&month=YYYY-MM`).
-- A user can delete only their own transactions; foreign deletion attempts return HTTP 404 or 403.
-- All SQL uses parameterized queries (`%s` with params list) with escaped date format strings (`%%Y-%%m`) — zero string concatenation.
-- All forms enforce client-side validation and server-side validation with CSRF tokens (`{% csrf_token %}`).
-- Secrets (`SECRET_KEY`, DB password) live in `.env` and are strictly git-ignored.
+### 3. Full-Stack Integration, Security & Auth
+- **Django 5.2 MVT Architecture:** Clean separation of concerns between models, views, and templates.
+- **Parameterized Raw SQL Query Engine:** To prove direct database query proficiency, all dashboard aggregations, monthly summaries, and history filters in [`tracker/queries.py`](tracker/queries.py) are executed via `connection.cursor()` with `%s` DB-API parameterization—strictly immune to SQL injection (OWASP A03).
+- **Authentication & Password Security:**
+  - User registration and login utilizing Django's authentication system.
+  - Passwords hashed using industry-standard **PBKDF2 with SHA-256** and 870,000 hashing iterations (OWASP A02).
+  - Unauthenticated access to protected views (`/dashboard/`, `/add/`, `/history/`) strictly blocked via `@login_required` decorators with safe return redirects (`?next=`).
+- **Row-Level Authorization (IDOR Defense):** Every database query and transaction mutation explicitly scopes to `user_id = request.user.id`. Transaction deletion requires HTTP POST and verifies record ownership; attempts to access or delete another user's records return HTTP 404/403 (OWASP A01).
+- **CSRF & Form Hardening:** All forms require valid CSRF middleware tokens (`{% csrf_token %}`).
+- **Subresource Integrity (SRI):** CDN-loaded Chart.js bundle verified via cryptographic SHA-256 hash (`integrity` and `crossorigin="anonymous"` attributes per OWASP A08).
 
 ---
 
-## Coursework Scope & Rubric Alignment (CSC 226)
+## Feature Checklist
 
-This project is tailored specifically to Professor Joseph Tooker's grading distribution:
+- [x] **Project Scaffold & Tooling (Spec 01):** Django 5 project structure, virtual environment, `.env` configuration, MySQL `pymysql` driver bridge, Pytest test runner.
+- [x] **Database Schema & DDL (Spec 02):** Normalized 3NF MySQL schema, `schema.sql`, Django models, range check constraints, category seed command (`seed_categories`).
+- [x] **Frontend Design System (Spec 03):** Semantic CSS tokens, WCAG 2.2 AA accessible base layout, loading spinner, double-submit guard.
+- [x] **User Authentication (Spec 04):** Registration, login, logout, PBKDF2 password hashing, `@login_required` route protection.
+- [x] **Add Expense Transaction (Spec 05):** Validated expense entry form, accessible error bindings, user ownership assignment.
+- [x] **Dashboard Metrics & Raw SQL (Spec 06):** Parameterized raw SQL aggregation queries, monthly total spending, category breakdown, dynamic budget progress bar.
+- [x] **Transaction History & Filtering (Spec 07):** Filterable history table (by category, month, and note search), 15-item pagination, safe POST-only transaction deletion.
+- [x] **Spending Breakdown Chart (Spec 08 - Stretch):** Interactive horizontal bar chart via CDN with Subresource Integrity (SRI) and accessible dual-table presentation.
+- [x] **Project Documentation (Spec 09):** Comprehensive `README.md` detailing architecture, setup, testing, and security.
 
-1. **Database Design (20%):**
-   - Normalized 3NF tables (`categories`, `transactions`) with correct constraints and foreign keys (`ON DELETE CASCADE`).
-   - Strict `DECIMAL(10, 2)` monetary representation.
-   - Dual-presence: `schema.sql` for MySQL Workbench demonstration and Django `models.py` for application integration.
-2. **User Interface Design / Idea (10%):**
-   - Clean, purposeful CSS token system (no messy frameworks, no AI slop).
-   - WCAG 2.2 AA accessible focus indicators and contrast ratios.
-   - Client-side validation attributes (`required`, `min`, `step`) on all inputs.
-   - Visual feedback: button submit loading spinner, CSS transition effects, and a dynamic budget progress bar.
-3. **The Rest of the Work — Backend, Integration, Security (20%):**
-   - Django 5 MVT architecture connecting to local MySQL.
-   - Built-in session authentication (`django.contrib.auth`).
-   - Web Application Security: Parameterized SQL queries (ASVS 1.2.4 / OWASP A05), strict row-level ownership isolation (OWASP A01), and CSRF token protection on all mutative requests.
+---
+
+## Database Schema (3NF)
+
+```sql
+-- Category Lookup Table
+CREATE TABLE tracker_category (
+    id    BIGINT       AUTO_INCREMENT PRIMARY KEY,
+    name  VARCHAR(50)  NOT NULL UNIQUE,
+    color VARCHAR(7)   NOT NULL DEFAULT '#2D7DD2'
+) ENGINE=InnoDB;
+
+-- Transaction Table
+CREATE TABLE tracker_transaction (
+    id          BIGINT         AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT            NOT NULL,
+    category_id BIGINT         NOT NULL,
+    amount      DECIMAL(10, 2) NOT NULL,
+    note        VARCHAR(255)   NULL,
+    tx_date     DATE           NOT NULL,
+    created_at  DATETIME(6)    NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    INDEX idx_tx_user_date (user_id, tx_date),
+    CONSTRAINT fk_tx_user     FOREIGN KEY (user_id)     REFERENCES auth_user(id)        ON DELETE CASCADE,
+    CONSTRAINT fk_tx_category FOREIGN KEY (category_id) REFERENCES tracker_category(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_amount_pos CHECK (amount > 0.00 AND amount <= 999999.99)
+) ENGINE=InnoDB;
+```
+
+---
+
+## Setup & Installation Guide
+
+Follow these steps to set up and run the application locally from a clean clone:
+
+### Prerequisites
+- Python 3.10+ (tested on Python 3.14)
+- MySQL Server 8.0.16+ running locally (enforced CHECK constraints support; tested via MySQL Workbench)
+- Git
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/SamuelIVX/expense-tracker.git
+cd expense-tracker
+```
+
+### 2. Create and Activate Virtual Environment
+```bash
+# macOS / Linux (bash/zsh):
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Windows (Command Prompt):
+.\.venv\Scripts\activate.bat
+
+# Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure Environment Variables
+Copy `.env.example` to `.env` and fill in your local MySQL credentials:
+```bash
+# macOS / Linux / PowerShell:
+cp .env.example .env
+
+# Windows (Command Prompt):
+copy .env.example .env
+```
+Edit `.env`:
+```ini
+DEBUG=True
+SECRET_KEY=your-secure-development-secret-key-here
+DB_NAME=expense_tracker
+DB_USER=root
+DB_PASSWORD=YourMySQLPasswordHere
+DB_HOST=127.0.0.1
+DB_PORT=3306
+```
+
+### 5. Initialize the MySQL Database
+Create the database in MySQL:
+```bash
+# Option A: Command Line (using MySQL client)
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS expense_tracker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# Option B: MySQL Workbench
+# Execute: CREATE DATABASE IF NOT EXISTS expense_tracker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### 6. Run Migrations & Seed Default Categories
+```bash
+# Apply Django authentication and application migrations to create tables
+python manage.py migrate
+
+# Seed standard spending categories (Food, Transport, Housing, etc.)
+python manage.py seed_categories
+```
+
+> **Note on `schema.sql`:** [`schema.sql`](schema.sql) contains the standalone MySQL 8.0 DDL reference script illustrating the 3NF schema, check constraints, and composite indexes for inspection in MySQL Workbench.
+
+### 7. Start the Local Server
+```bash
+python manage.py runserver
+```
+Navigate to `http://127.0.0.1:8000/login/` or `http://127.0.0.1:8000/register/` in your browser to create an account and begin tracking expenses.
+
+---
+
+## Running Automated Tests
+
+The project includes 61 comprehensive automated test cases covering models, forms, parameterized queries, authentication isolation, view routing, accessibility attributes, and XSS prevention.
+
+Tests can be executed across all platforms (macOS, Linux, and Windows) against both the fast in-memory SQLite runner and the live MySQL instance:
+
+### 1. In-Memory SQLite Suite (Fast / No DB Setup Required)
+```bash
+# macOS / Linux (bash/zsh):
+DB_ENGINE=sqlite python -m pytest --ds=expense_tracker.test_settings
+
+# Windows (Command Prompt):
+set DB_ENGINE=sqlite && python -m pytest --ds=expense_tracker.test_settings
+
+# Windows (PowerShell):
+$env:DB_ENGINE="sqlite"; python -m pytest --ds=expense_tracker.test_settings
+```
+
+### 2. Local MySQL 8.0 Suite (Exercises Live Database)
+```bash
+# macOS / Linux (bash/zsh):
+DB_ENGINE=mysql python -m pytest --ds=expense_tracker.settings
+
+# Windows (Command Prompt):
+set DB_ENGINE=mysql && python -m pytest --ds=expense_tracker.settings
+
+# Windows (PowerShell):
+$env:DB_ENGINE="mysql"; python -m pytest --ds=expense_tracker.settings
+```
+
+All 61 tests pass cleanly on both backends.
