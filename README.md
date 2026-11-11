@@ -75,7 +75,7 @@ The project is engineered around three foundational pillars:
 ### 2. User Interface Design & Craftsmanship
 - **Design Tokens System:** Centralized CSS custom properties in [`static/css/style.css`](static/css/style.css) defining brand colors, typography, spacing, surface elevations, and responsive breakpoints.
 - **Accessibility (WCAG 2.2 AA Compliance):**
-  - High-contrast color palette (≥ 4.5:1 text-on-background ratio; ≥ 3:1 for interactive controls).
+  - High-contrast color palette meeting WCAG 2.2 AA (≥ 4.5:1 text-on-background ratio; distinct :focus-visible outlines on interactive controls).
   - Visible `:focus-visible` outlines on all interactive elements.
   - Screen reader support: `role="progressbar"`, `aria-valuenow`, `aria-describedby` form error bindings, and table column scopes (`scope="col"`).
   - Respects `prefers-reduced-motion` media queries.
@@ -178,7 +178,11 @@ pip install -r requirements.txt
 ### 4. Configure Environment Variables
 Copy `.env.example` to `.env` and fill in your local MySQL credentials:
 ```bash
+# macOS / Linux / PowerShell:
 cp .env.example .env
+
+# Windows (Command Prompt):
+copy .env.example .env
 ```
 Edit `.env`:
 ```ini
@@ -226,15 +230,28 @@ The project includes 61 comprehensive automated test cases covering models, form
 
 Tests can be executed across all platforms (macOS, Linux, and Windows) against both the fast in-memory SQLite runner and the live MySQL instance:
 
+### 1. In-Memory SQLite Suite (Fast / No DB Setup Required)
 ```bash
-# 1. Run tests using in-memory SQLite (Default / Fast):
-python -m pytest --ds=expense_tracker.test_settings
+# macOS / Linux (bash/zsh):
+DB_ENGINE=sqlite python -m pytest --ds=expense_tracker.test_settings
 
-# 2. Run tests against local MySQL 8.0 instance:
-python -m pytest --ds=expense_tracker.settings
+# Windows (Command Prompt):
+set DB_ENGINE=sqlite && python -m pytest --ds=expense_tracker.test_settings
 
-# 3. Run with verbose output and test names:
-python -m pytest --ds=expense_tracker.test_settings -v
+# Windows (PowerShell):
+$env:DB_ENGINE="sqlite"; python -m pytest --ds=expense_tracker.test_settings
+```
+
+### 2. Local MySQL 8.0 Suite (Exercises Live Database)
+```bash
+# macOS / Linux (bash/zsh):
+DB_ENGINE=mysql python -m pytest --ds=expense_tracker.settings
+
+# Windows (Command Prompt):
+set DB_ENGINE=mysql && python -m pytest --ds=expense_tracker.settings
+
+# Windows (PowerShell):
+$env:DB_ENGINE="mysql"; python -m pytest --ds=expense_tracker.settings
 ```
 
 All 61 tests pass cleanly on both backends.
