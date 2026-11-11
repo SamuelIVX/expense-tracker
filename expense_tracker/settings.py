@@ -80,10 +80,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'expense_tracker.wsgi.application'
 
-# Database configuration (MySQL 8.0+ via PyMySQL)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
+# Database configuration (MySQL 8.0+ via PyMySQL by default)
+SUPPORTED_ENGINES = {
+    'django.db.backends.mysql': {
         'NAME': os.environ.get('DB_NAME', 'expense_tracker'),
         'USER': os.environ.get('DB_USER', 'root'),
         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
@@ -92,6 +91,20 @@ DATABASES = {
         'OPTIONS': {
             'charset': 'utf8mb4',
         },
+    },
+    'django.db.backends.sqlite3': {
+        'NAME': BASE_DIR / 'db.sqlite3',
+    },
+}
+
+DB_ENGINE = os.environ.get('DB_ENGINE', 'django.db.backends.mysql')
+if DB_ENGINE not in SUPPORTED_ENGINES:
+    raise ImproperlyConfigured(f"Unsupported DB_ENGINE '{DB_ENGINE}'. Must be one of: {list(SUPPORTED_ENGINES.keys())}")
+
+DATABASES = {
+    'default': {
+        'ENGINE': DB_ENGINE,
+        **SUPPORTED_ENGINES[DB_ENGINE],
     }
 }
 
