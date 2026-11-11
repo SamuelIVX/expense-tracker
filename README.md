@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.14-blue.svg)](https://www.python.org/)
 [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)](https://www.mysql.com/)
-[![Tests](https://img.shields.io/badge/Tests-61%20Passing-brightgreen.svg)](tracker/tests.py)
+[![Tests](https://img.shields.io/badge/Tests-78%20Passing-brightgreen.svg)](tracker/tests.py)
 
 A secure, database-driven web application for tracking and analyzing personal daily expenditures. Built for **CSC 226: Web Database Applications** (Fall 2026), this application allows authenticated users to log expenses, monitor monthly spending targets with a dynamic budget progress bar, visualize category breakdowns using an interactive Chart.js bar chart, and filter past transaction history.
 
@@ -62,9 +62,10 @@ The application demonstrates proficiency in **Relational Database Design**, **Us
 The project is engineered around three foundational pillars:
 
 ### 1. Database Design
-- **3NF Relational Normalization:** Complete separation of entity domains (`auth_user`, `tracker_category`, `tracker_transaction`), eliminating insertion, update, and deletion anomalies.
+- **3NF Relational Normalization:** Complete separation of entity domains (`auth_user`, `tracker_userprofile`, `tracker_category`, `tracker_transaction`), eliminating insertion, update, and deletion anomalies.
 - **Referential Integrity & Cascades:**
   - `fk_tx_user`: References `auth_user(id)` (`INT`) with `ON DELETE CASCADE` in `schema.sql` and `on_delete=models.CASCADE` in Django ORM (deleting a user account cleans up all associated transactions).
+  - `fk_profile_user`: References `auth_user(id)` (`INT`) with `ON DELETE CASCADE` (deleting a user removes their user profile and custom budget settings).
   - `fk_tx_category`: References `tracker_category(id)` with `ON DELETE RESTRICT` in `schema.sql` and `on_delete=models.PROTECT` in Django ORM (prevents deletion of categories currently referenced by active transactions).
 - **Domain Constraints & Monetary Types:**
   - `DECIMAL(10, 2)` monetary columns throughout—guaranteeing exact cent precision and eliminating floating-point rounding errors.
@@ -111,6 +112,7 @@ The project is engineered around three foundational pillars:
 - [x] **Transaction History & Filtering (Spec 07):** Filterable history table (by category, month, and note search), 15-item pagination, safe POST-only transaction deletion.
 - [x] **Spending Breakdown Chart (Spec 08 - Stretch):** Interactive horizontal bar chart via CDN with Subresource Integrity (SRI) and accessible dual-table presentation.
 - [x] **Project Documentation (Spec 09):** Comprehensive `README.md` detailing architecture, setup, testing, and security.
+- [x] **Polish & Enhancements:** Root redirect to login/dashboard, wallet brand icon, icon-based logout with user badge, customizable monthly budget per user, and CSV export.
 
 ---
 
@@ -137,6 +139,15 @@ CREATE TABLE tracker_transaction (
     CONSTRAINT fk_tx_user     FOREIGN KEY (user_id)     REFERENCES auth_user(id)        ON DELETE CASCADE,
     CONSTRAINT fk_tx_category FOREIGN KEY (category_id) REFERENCES tracker_category(id) ON DELETE RESTRICT,
     CONSTRAINT chk_amount_pos CHECK (amount > 0.00 AND amount <= 999999.99)
+) ENGINE=InnoDB;
+
+-- User Profile Table (Customizable Monthly Budget)
+CREATE TABLE tracker_userprofile (
+    id             BIGINT         AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT            NOT NULL UNIQUE,
+    monthly_budget DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
+    CONSTRAINT fk_profile_user FOREIGN KEY (user_id) REFERENCES auth_user(id) ON DELETE CASCADE,
+    CONSTRAINT chk_profile_budget_pos CHECK (monthly_budget > 0.00 AND monthly_budget <= 999999.99)
 ) ENGINE=InnoDB;
 ```
 
@@ -226,7 +237,7 @@ Navigate to `http://127.0.0.1:8000/login/` or `http://127.0.0.1:8000/register/` 
 
 ## Running Automated Tests
 
-The project includes 61 comprehensive automated test cases covering models, forms, parameterized queries, authentication isolation, view routing, accessibility attributes, and XSS prevention.
+The project includes 78 comprehensive automated test cases covering models, forms, parameterized queries, authentication isolation, view routing, accessibility attributes, customizable monthly budgets, CSV data export, and XSS prevention.
 
 Tests can be executed across all platforms (macOS, Linux, and Windows) against both the fast in-memory SQLite runner and the live MySQL instance:
 
@@ -254,4 +265,4 @@ set DB_ENGINE=mysql && python -m pytest --ds=expense_tracker.settings
 $env:DB_ENGINE="mysql"; python -m pytest --ds=expense_tracker.settings
 ```
 
-All 61 tests pass cleanly on both backends.
+All 78 tests pass cleanly on both backends.

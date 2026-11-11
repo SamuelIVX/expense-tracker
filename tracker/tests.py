@@ -27,16 +27,10 @@ import re
 import sys
 import pymysql
 from expense_tracker import settings as app_settings
-from .models import Category, Transaction
+from .models import Category, Transaction, UserProfile
 
 class ScaffoldSmokeTests(SimpleTestCase):
     """Verifies baseline project scaffolding and smoke-test routing."""
-
-    def test_smoke_route_status_200(self):
-        """GET / returns HTTP 200 with expected smoke-test string."""
-        response = self.client.get(reverse('index'))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Expense Tracker — up.")
 
     def test_mysql_driver_bridged(self):
         """Verifies pymysql is directly registered as the MySQLdb module object."""
@@ -66,6 +60,23 @@ class ScaffoldSmokeTests(SimpleTestCase):
             self.assertFalse(app_settings.SESSION_COOKIE_SECURE)
             self.assertFalse(app_settings.CSRF_COOKIE_SECURE)
             self.assertTrue(app_settings.DEBUG)
+
+class RootRedirectTests(TestCase):
+    """Verifies root endpoint routing policies for authenticated vs unauthenticated users."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="redirect_user", password="password123")
+
+    def test_root_redirects_anonymous_to_login(self):
+        """GET / redirects unauthenticated visitors to /login/."""
+        response = self.client.get(reverse('index'))
+        self.assertRedirects(response, reverse('login'))
+
+    def test_root_redirects_authenticated_to_dashboard(self):
+        """GET / redirects authenticated users to /dashboard/."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('index'))
+        self.assertRedirects(response, reverse('dashboard'))
 
 class CategoryModelTests(TestCase):
     """Verifies Category entity rules and constraints."""
@@ -236,7 +247,9 @@ class FrontendDesignSystemTests(TestCase):
         self.assertIn(f'href="{reverse("add_transaction")}"', rendered)
         self.assertIn(f'href="{reverse("transaction_history")}"', rendered)
         self.assertIn(f'action="{reverse("logout")}"', rendered)
-        self.assertIn('Logout (alex)', rendered)
+        self.assertIn('alex', rendered)
+        self.assertIn('class="et-user-badge"', rendered)
+        self.assertIn('class="et-logout-icon"', rendered)
         self.assertNotIn(f'href="{reverse("login")}"', rendered)
         self.assertNotIn(f'href="{reverse("register")}"', rendered)
 
@@ -1024,3 +1037,211 @@ class TransactionHistoryViewTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.post(reverse('delete_transaction', kwargs={'pk': 99999}))
         self.assertEqual(response.status_code, 404)
+
+
+class UserProfileModelTests(TestCase):
+    """Verifies UserProfile model defaults, constraints, and string representation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="profile_user", password="password123")
+
+    def test_profile_creation_defaults(self):
+        """UserProfile initializes with default monthly budget benchmark of $1000.00."""
+        profile = UserProfile.objects.create(user=self.user)
+        self.assertEqual(profile.monthly_budget, Decimal('1000.00'))
+        self.assertIn("profile_user's Profile (Budget: $1000.00)", str(profile))
+
+    def test_profile_one_to_one_constraint(self):
+        """Each user can only have a single UserProfile record."""
+        UserProfile.objects.create(user=self.user, monthly_budget=Decimal('1500.00'))
+        with self.assertRaises(IntegrityError):
+            UserProfile.objects.create(user=self.user, monthly_budget=Decimal('2000.00'))
+
+    def test_profile_check_constraint_rejects_non_positive_budget(self):
+        """Model check constraint chk_profile_budget_pos prevents non-positive budgets."""
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                UserProfile.objects.create(user=self.user, monthly_budget=Decimal('0.00'))
+
+
+class BudgetManagementTests(TestCase):
+    """Verifies customizable monthly budget updates and validation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="budget_user", password="password123")
+
+    def test_update_budget_unauthenticated_redirects_to_login(self):
+        """Unauthenticated POST to update_budget redirects to login page."""
+        response = self.client.post(reverse('update_budget'), {'monthly_budget': '1500.00'})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
+
+    def test_update_budget_valid_post(self):
+        """Authenticated POST with valid budget updates profile and redirects to dashboard."""
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('update_budget'),
+            {'monthly_budget': '2250.50'},
+            follow=True
+        )
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertContains(response, "Monthly budget successfully updated to $2250.50.")
+
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.monthly_budget, Decimal('2250.50'))
+
+    def test_update_budget_invalid_amount_rejected(self):
+        """Invalid or non-positive budget values are rejected with an error notification."""
+        self.client.force_login(self.user)
+
+        # Zero amount
+        response_zero = self.client.post(reverse('update_budget'), {'monthly_budget': '0.00'}, follow=True)
+        self.assertRedirects(response_zero, reverse('dashboard'))
+        self.assertContains(response_zero, "Please enter a valid monthly budget amount")
+
+        # Negative amount
+        response_neg = self.client.post(reverse('update_budget'), {'monthly_budget': '-150.00'}, follow=True)
+        self.assertRedirects(response_neg, reverse('dashboard'))
+        self.assertContains(response_neg, "Please enter a valid monthly budget amount")
+
+        # Non-numeric string
+        response_nan = self.client.post(reverse('update_budget'), {'monthly_budget': 'abc'}, follow=True)
+        self.assertRedirects(response_nan, reverse('dashboard'))
+        self.assertContains(response_nan, "Please enter a valid monthly budget amount")
+
+        # Fractional sub-cents (e.g. 0.001)
+        response_subcent = self.client.post(reverse('update_budget'), {'monthly_budget': '0.001'}, follow=True)
+        self.assertRedirects(response_subcent, reverse('dashboard'))
+        self.assertContains(response_subcent, "Please enter a valid monthly budget amount")
+
+    def test_update_budget_get_rejected_with_405(self):
+        """GET request to update_budget endpoint returns HTTP 405 Method Not Allowed."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('update_budget'))
+        self.assertEqual(response.status_code, 405)
+
+
+class ExportCSVTests(TestCase):
+    """Verifies transaction history CSV export functionality and user isolation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="export_user", password="password123")
+        self.other_user = User.objects.create_user(username="other_user", password="password123")
+        self.cat_food = Category.objects.create(name="Food", color="#FF5733")
+        self.cat_transport = Category.objects.create(name="Transport", color="#33A8FF")
+
+        # Seed transactions for user
+        Transaction.objects.create(
+            user=self.user,
+            category=self.cat_food,
+            amount=Decimal('42.50'),
+            tx_date=date(2026, 11, 5),
+            note="Grocery run"
+        )
+        Transaction.objects.create(
+            user=self.user,
+            category=self.cat_transport,
+            amount=Decimal('15.00'),
+            tx_date=date(2026, 11, 8),
+            note="Subway fare"
+        )
+        # Seed transaction for other user
+        Transaction.objects.create(
+            user=self.other_user,
+            category=self.cat_food,
+            amount=Decimal('99.99'),
+            tx_date=date(2026, 11, 5),
+            note="Secret other transaction"
+        )
+
+    def test_export_unauthenticated_redirects_to_login(self):
+        """Unauthenticated GET to CSV export redirects to login."""
+        response = self.client.get(reverse('export_csv'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
+
+    def test_export_csv_authenticated_and_content(self):
+        """Authenticated GET returns CSV attachment containing user records and headers."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('export_csv'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('attachment; filename="transactions.csv"', response['Content-Disposition'])
+
+        csv_content = response.content.decode('utf-8')
+        self.assertIn("Date,Category,Amount,Description", csv_content)
+        self.assertIn("2026-11-05,Food,42.50,Grocery run", csv_content)
+        self.assertIn("2026-11-08,Transport,15.00,Subway fare", csv_content)
+        # Verify strict user isolation (no data leakage)
+        self.assertNotIn("Secret other transaction", csv_content)
+        self.assertNotIn("99.99", csv_content)
+
+    def test_export_csv_respects_category_filter(self):
+        """CSV export filters records by category query parameter."""
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('export_csv')}?category={self.cat_food.id}")
+        csv_content = response.content.decode('utf-8')
+        self.assertIn("Grocery run", csv_content)
+        self.assertNotIn("Subway fare", csv_content)
+
+    def test_export_csv_respects_search_filter(self):
+        """CSV export filters records by text search query parameter."""
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('export_csv')}?q=Subway")
+        csv_content = response.content.decode('utf-8')
+        self.assertIn("Subway fare", csv_content)
+        self.assertNotIn("Grocery run", csv_content)
+
+    def test_export_csv_mitigates_formula_injection(self):
+        """CSV export prepends single quote to values beginning with =, +, -, @ to prevent formula execution."""
+        Transaction.objects.create(
+            user=self.user,
+            category=self.cat_food,
+            amount=Decimal('12.00'),
+            tx_date=date(2026, 11, 9),
+            note="=cmd|' /C calc'!A0"
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('export_csv'))
+        csv_content = response.content.decode('utf-8')
+        self.assertIn("'=cmd|' /C calc'!A0", csv_content)
+
+
+class UIComponentsAndTemplateTests(TestCase):
+    """Verifies presence of brand icon, user badge, logout icon, and export link in UI."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ui_tester", password="password123")
+
+    def test_base_template_brand_icon_and_unauthenticated_nav(self):
+        """Renders brand wallet SVG and unauthenticated navigation elements."""
+        response = self.client.get(reverse('login'))
+        self.assertContains(response, 'class="et-brand__icon"')
+        self.assertContains(response, 'ExpenseTracker')
+        self.assertContains(response, 'Login')
+        self.assertContains(response, 'Register')
+        self.assertNotContains(response, 'class="et-user-badge"')
+
+    def test_base_template_authenticated_user_badge_and_logout_icon(self):
+        """Authenticated navigation renders user badge pill and icon logout button."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertContains(response, 'class="et-user-badge"')
+        self.assertContains(response, 'ui_tester')
+        self.assertContains(response, 'class="et-logout-icon"')
+        self.assertContains(response, 'aria-label="Log out of ui_tester"')
+
+    def test_dashboard_renders_custom_budget_editor(self):
+        """Dashboard renders monthly budget stat and quick edit dropdown popover."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertContains(response, 'class="et-budget-dropdown"')
+        self.assertContains(response, 'name="monthly_budget"')
+        self.assertContains(response, reverse('update_budget'))
+
+    def test_history_renders_export_csv_button(self):
+        """History view renders accessible Export CSV action button."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('transaction_history'))
+        self.assertContains(response, reverse('export_csv'))
+        self.assertContains(response, 'Export CSV')

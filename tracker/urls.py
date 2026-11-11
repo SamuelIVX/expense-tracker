@@ -13,8 +13,10 @@ from .forms import LoginForm
 urlpatterns = [
     path('', views.index, name='index'),
     path('dashboard/', views.dashboard_view, name='dashboard'),
+    path('dashboard/budget/', views.update_budget_view, name='update_budget'),
     path('add/', views.add_transaction_view, name='add_transaction'),
     path('history/', views.transaction_history_view, name='transaction_history'),
+    path('history/export/', views.export_transactions_csv_view, name='export_csv'),
     path('delete/<int:pk>/', views.delete_transaction_view, name='delete_transaction'),
     path('login/', auth_views.LoginView.as_view(
         template_name='registration/login.html',
