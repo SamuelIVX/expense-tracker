@@ -1,0 +1,37 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment secrets
+.env
+.env.local
+
+# Databases
+*.sqlite3
+db.sqlite3
+
+# Static / media (collected)
+staticfiles/
+
+# Testing & coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*~
