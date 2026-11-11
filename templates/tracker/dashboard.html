@@ -77,7 +77,7 @@
 
         {% if category_breakdown %}
             <div class="et-table-responsive" style="margin-bottom: 0;">
-                <table class="et-table">
+                <table class="et-table" id="categoryBreakdownTable">
                     <thead>
                         <tr>
                             <th scope="col">Category</th>
@@ -100,6 +100,12 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+
+            <div class="et-chart-container" style="margin-top: 1.5rem; position: relative; height: 220px;">
+                <canvas id="categoryChart" height="220" aria-label="Horizontal bar chart showing spending by category" aria-describedby="categoryBreakdownTable" role="img">
+                    <p>Horizontal bar chart showing spending by category. Refer to the data table above for details.</p>
+                </canvas>
             </div>
         {% else %}
             <div class="et-empty-state">
@@ -153,4 +159,60 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if category_breakdown %}
+{{ category_breakdown_data|json_script:"category-breakdown-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" 
+        integrity="sha256-CN+kcwVxsjgQw0/DnFEBRh7K/KVsP5LK9IUFCcsVjzA= sha256-R4pqcOYV8lt7snxMQO/HSbVCFRPMdrhAFMH+vr9giYI=" 
+        crossorigin="anonymous"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof Chart === 'undefined') return;
+        const dataElement = document.getElementById('category-breakdown-data');
+        const rawData = dataElement ? JSON.parse(dataElement.textContent) : [];
+        const canvas = document.getElementById('categoryChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: rawData.map(item => item.name),
+                datasets: [{
+                    label: 'Spent ($)',
+                    data: rawData.map(item => item.total),
+                    backgroundColor: rawData.map(item => item.color),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.parsed.x !== undefined && context.parsed.x !== null ? context.parsed.x : context.raw;
+                                return ' Spent: $' + Number(val).toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: value => '$' + Number(value).toFixed(2)
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endif %}
 {% endblock %}

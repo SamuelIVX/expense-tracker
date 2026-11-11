@@ -3,6 +3,7 @@ Views for the tracker application.
 """
 
 import calendar
+import json
 from datetime import date
 from decimal import Decimal
 from django.core.paginator import Paginator
@@ -52,6 +53,18 @@ def dashboard_view(request):
     category_breakdown = get_monthly_category_breakdown(
         user_id, start_of_month, end_of_month, total_spent=total_spent
     )
+    category_breakdown_data = [
+        {
+            'category_id': item['category_id'],
+            'name': item['name'],
+            'color': item['color'],
+            'total': float(item['total']),
+            'tx_count': item['tx_count'],
+            'percentage': item['percentage'],
+        }
+        for item in category_breakdown
+    ]
+    category_breakdown_json = json.dumps(category_breakdown_data)
     recent_transactions = get_recent_transactions(user_id, limit=5)
 
     budget = DEFAULT_MONTHLY_BUDGET
@@ -84,6 +97,8 @@ def dashboard_view(request):
         'over_budget_amount': over_budget_amount,
         'progress_class': progress_class,
         'category_breakdown': category_breakdown,
+        'category_breakdown_data': category_breakdown_data,
+        'category_breakdown_json': category_breakdown_json,
         'recent_transactions': recent_transactions,
     }
     return render(request, 'tracker/dashboard.html', context)
