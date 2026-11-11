@@ -130,16 +130,52 @@
         });
     }
 
+    /**
+     * Initializes dark/light mode toggle with persistence and event notification.
+     */
+    function initThemeToggle() {
+        var toggleBtn = document.getElementById('theme-toggle');
+        if (!toggleBtn) {
+            return;
+        }
+
+        function updateAria(theme) {
+            var isDark = theme === 'dark';
+            toggleBtn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+            toggleBtn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        }
+
+        var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        updateAria(currentTheme);
+
+        toggleBtn.addEventListener('click', function () {
+            var activeTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            var nextTheme = activeTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', nextTheme);
+            try {
+                localStorage.setItem('et-theme', nextTheme);
+            } catch (e) {
+                // Ignore storage quotas / disabled storage
+            }
+            updateAria(nextTheme);
+
+            // Dispatch custom event for reactive components (such as Chart.js)
+            window.dispatchEvent(new CustomEvent('themechanged', { detail: { theme: nextTheme } }));
+        });
+    }
+
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             initFormSubmissionGuards();
             initAlertDismissals();
             initBfcacheRestoration();
+            initThemeToggle();
         });
     } else {
         initFormSubmissionGuards();
         initAlertDismissals();
         initBfcacheRestoration();
+        initThemeToggle();
     }
 })();

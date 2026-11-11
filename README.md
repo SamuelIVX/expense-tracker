@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.14-blue.svg)](https://www.python.org/)
 [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)](https://www.mysql.com/)
-[![Tests](https://img.shields.io/badge/Tests-78%20Passing-brightgreen.svg)](tracker/tests.py)
+[![Tests](https://img.shields.io/badge/Tests-79%20Passing-brightgreen.svg)](tracker/tests.py)
 
 A secure, database-driven web application for tracking and analyzing personal daily expenditures. Built for **CSC 226: Web Database Applications** (Fall 2026), this application allows authenticated users to log expenses, monitor monthly spending targets with a dynamic budget progress bar, visualize category breakdowns using an interactive Chart.js bar chart, and filter past transaction history.
 
@@ -112,7 +112,7 @@ The project is engineered around three foundational pillars:
 - [x] **Transaction History & Filtering (Spec 07):** Filterable history table (by category, month, and note search), 15-item pagination, safe POST-only transaction deletion.
 - [x] **Spending Breakdown Chart (Spec 08 - Stretch):** Interactive horizontal bar chart via CDN with Subresource Integrity (SRI) and accessible dual-table presentation.
 - [x] **Project Documentation (Spec 09):** Comprehensive `README.md` detailing architecture, setup, testing, and security.
-- [x] **Polish & Enhancements:** Root redirect to login/dashboard, wallet brand icon, icon-based logout with user badge, customizable monthly budget per user, and CSV export.
+- [x] **Polish & Enhancements:** Root redirect to login/dashboard, wallet brand icon, icon-only logout, customizable monthly budget per user, CSV export, dark/light theme switcher with persistence, and financial slate-teal palette.
 
 ---
 
@@ -237,7 +237,7 @@ Navigate to `http://127.0.0.1:8000/login/` or `http://127.0.0.1:8000/register/` 
 
 ## Running Automated Tests
 
-The project includes 78 comprehensive automated test cases covering models, forms, parameterized queries, authentication isolation, view routing, accessibility attributes, customizable monthly budgets, CSV data export, and XSS prevention.
+The project includes 79 comprehensive automated test cases covering models, forms, parameterized queries, authentication isolation, view routing, accessibility attributes, customizable monthly budgets, CSV data export, theme toggling, and XSS prevention.
 
 Tests can be executed across all platforms (macOS, Linux, and Windows) against both the fast in-memory SQLite runner and the live MySQL instance:
 
@@ -265,4 +265,4 @@ set DB_ENGINE=mysql && python -m pytest --ds=expense_tracker.settings
 $env:DB_ENGINE="mysql"; python -m pytest --ds=expense_tracker.settings
 ```
 
-All 78 tests pass cleanly on both backends.
+All 79 tests pass cleanly on both backends.

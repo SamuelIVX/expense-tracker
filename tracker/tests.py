@@ -247,9 +247,9 @@ class FrontendDesignSystemTests(TestCase):
         self.assertIn(f'href="{reverse("add_transaction")}"', rendered)
         self.assertIn(f'href="{reverse("transaction_history")}"', rendered)
         self.assertIn(f'action="{reverse("logout")}"', rendered)
-        self.assertIn('alex', rendered)
-        self.assertIn('class="et-user-badge"', rendered)
+        self.assertIn('class="et-theme-toggle"', rendered)
         self.assertIn('class="et-logout-icon"', rendered)
+        self.assertNotIn('class="et-user-badge"', rendered)
         self.assertNotIn(f'href="{reverse("login")}"', rendered)
         self.assertNotIn(f'href="{reverse("register")}"', rendered)
 
@@ -267,7 +267,8 @@ class FrontendDesignSystemTests(TestCase):
         self.assertIn('<footer class="et-footer" role="contentinfo">', rendered)
         self.assertIn('aria-label="Main Navigation"', rendered)
         self.assertIn('<meta name="viewport" content="width=device-width, initial-scale=1.0">', rendered)
-        self.assertIn('CSC 226 — Web Database Applications', rendered)
+        self.assertIn('ExpenseTracker. All rights reserved.', rendered)
+        self.assertNotIn('CSC 226', rendered)
 
     def test_django_messages_live_announcement(self):
         """Messages framework renders alerts with role='status' for info/success and role='alert' for errors."""
@@ -1222,14 +1223,20 @@ class UIComponentsAndTemplateTests(TestCase):
         self.assertContains(response, 'Register')
         self.assertNotContains(response, 'class="et-user-badge"')
 
-    def test_base_template_authenticated_user_badge_and_logout_icon(self):
-        """Authenticated navigation renders user badge pill and icon logout button."""
+    def test_base_template_authenticated_theme_toggle_and_logout_icon(self):
+        """Authenticated navigation renders theme toggle and accessible icon logout button."""
         self.client.force_login(self.user)
         response = self.client.get(reverse('dashboard'))
-        self.assertContains(response, 'class="et-user-badge"')
-        self.assertContains(response, 'ui_tester')
+        self.assertContains(response, 'id="theme-toggle"')
         self.assertContains(response, 'class="et-logout-icon"')
-        self.assertContains(response, 'aria-label="Log out of ui_tester"')
+        self.assertContains(response, 'aria-label="Log out"')
+        self.assertNotContains(response, 'class="et-user-badge"')
+
+    def test_clean_footer_rendered_without_academic_metadata(self):
+        """Footer renders copyright statement without academic course metadata."""
+        response = self.client.get(reverse('login'))
+        self.assertContains(response, 'ExpenseTracker. All rights reserved.')
+        self.assertNotContains(response, 'CSC 226')
 
     def test_dashboard_renders_custom_budget_editor(self):
         """Dashboard renders monthly budget stat and quick edit dropdown popover."""
