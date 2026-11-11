@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Log In — Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="et-card et-auth-card">
+    <div class="et-card__header">
+        <h1 class="et-card__title">Log In</h1>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="et-alert et-alert--error" role="alert">
+            {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'login' %}" class="et-form">
+        {% csrf_token %}
+        {% if next %}
+            <input type="hidden" name="next" value="{{ next }}">
+        {% endif %}
+
+        <div class="et-form__group">
+            <label for="{{ form.username.id_for_label }}" class="et-label">Username</label>
+            {{ form.username }}
+            {% if form.username.errors %}
+                {% for error in form.username.errors %}
+                    <span class="et-form__error">{{ error }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="et-form__group">
+            <label for="{{ form.password.id_for_label }}" class="et-label">Password</label>
+            {{ form.password }}
+            {% if form.password.errors %}
+                {% for error in form.password.errors %}
+                    <span class="et-form__error">{{ error }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="et-form__group" style="margin-top: var(--et-space-lg);">
+            <button type="submit" class="et-btn et-btn--primary" style="width: 100%;">Log In</button>
+        </div>
+    </form>
+
+    <p style="margin-top: var(--et-space-md); margin-bottom: 0; text-align: center; font-size: 0.9rem; color: var(--et-text-muted);">
+        Don't have an account? <a href="{% url 'register' %}">Create one</a>
+    </p>
+</div>
+{% endblock %}

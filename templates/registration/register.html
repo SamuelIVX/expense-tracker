@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Create an Account — Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="et-card et-auth-card">
+    <div class="et-card__header">
+        <h1 class="et-card__title">Create an Account</h1>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="et-alert et-alert--error" role="alert">
+            {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'register' %}" class="et-form">
+        {% csrf_token %}
+
+        <div class="et-form__group">
+            <label for="{{ form.username.id_for_label }}" class="et-label">Username</label>
+            {{ form.username }}
+            {% if form.username.help_text %}
+                <span class="et-form__help">{{ form.username.help_text }}</span>
+            {% endif %}
+            {% if form.username.errors %}
+                {% for error in form.username.errors %}
+                    <span class="et-form__error">{{ error }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="et-form__group">
+            <label for="{{ form.password1.id_for_label }}" class="et-label">Password</label>
+            {{ form.password1 }}
+            {% if form.password1.help_text %}
+                <span class="et-form__help">{{ form.password1.help_text }}</span>
+            {% endif %}
+            {% if form.password1.errors %}
+                {% for error in form.password1.errors %}
+                    <span class="et-form__error">{{ error }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="et-form__group">
+            <label for="{{ form.password2.id_for_label }}" class="et-label">Confirm Password</label>
+            {{ form.password2 }}
+            {% if form.password2.help_text %}
+                <span class="et-form__help">{{ form.password2.help_text }}</span>
+            {% endif %}
+            {% if form.password2.errors %}
+                {% for error in form.password2.errors %}
+                    <span class="et-form__error">{{ error }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="et-form__group" style="margin-top: var(--et-space-lg);">
+            <button type="submit" class="et-btn et-btn--primary" style="width: 100%;">Create Account</button>
+        </div>
+    </form>
+
+    <p style="margin-top: var(--et-space-md); margin-bottom: 0; text-align: center; font-size: 0.9rem; color: var(--et-text-muted);">
+        Already have an account? <a href="{% url 'login' %}">Log in</a>
+    </p>
+</div>
+{% endblock %}
