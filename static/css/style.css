@@ -1,0 +1,621 @@
+/**
+ * Expense Tracker — Global Stylesheet
+ * CSC 226: Web Database Applications (Fall 2026)
+ *
+ * Implements Spec 03 (Frontend Design System) adhering to WCAG 2.2 AA accessibility,
+ * semantic CSS custom properties, responsive layout, and component design tokens.
+ */
+
+/* ==========================================================================
+   1. Design Tokens (CSS Custom Properties)
+   ========================================================================== */
+:root {
+    /* Brand Colors (WCAG 2.2 AA compliant contrast on white >= 4.5:1) */
+    --et-primary: #1D63B8;
+    --et-primary-hover: #154D92;
+    --et-primary-active: #103B70;
+    --et-primary-light: #EBF3FC;
+
+    /* Neutrals & Surfaces */
+    --et-bg: #F8F9FA;
+    --et-surface: #FFFFFF;
+    --et-text: #1A1D20;
+    --et-text-muted: #5A626A;
+    --et-border: #CED4DA;
+    --et-border-light: #E9ECEF;
+
+    /* Feedback & Status Colors */
+    --et-success: #1E7E34;
+    --et-success-bg: #D4EDDA;
+    --et-success-border: #C3E6CB;
+    --et-success-text: #155724;
+
+    --et-warn: #D35400;
+    --et-warn-bg: #FFF3CD;
+    --et-warn-border: #FFEEBA;
+    --et-warn-text: #856404;
+
+    --et-danger: #C0392B;
+    --et-danger-bg: #F8D7DA;
+    --et-danger-border: #F5C6CB;
+    --et-danger-text: #721C24;
+
+    --et-info: #0C5460;
+    --et-info-bg: #D1ECF1;
+    --et-info-border: #BEE5EB;
+    --et-info-text: #0C5460;
+
+    /* Accessibility / Focus */
+    --et-focus: #1D63B8;
+
+    /* Typography & Sizing */
+    --et-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --et-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --et-line-height: 1.5;
+
+    /* Spacing Scale */
+    --et-space-xs: 4px;
+    --et-space-sm: 8px;
+    --et-space-md: 16px;
+    --et-space-lg: 24px;
+    --et-space-xl: 32px;
+
+    /* Radii & Shadows */
+    --et-radius-sm: 4px;
+    --et-radius-md: 8px;
+    --et-radius-lg: 12px;
+    --et-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --et-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+    /* Animation & Transitions */
+    --et-transition: 0.2s ease;
+}
+
+/* ==========================================================================
+   2. Reset & Base Typography
+   ========================================================================== */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--et-font-sans);
+    line-height: var(--et-line-height);
+    color: var(--et-text);
+    background-color: var(--et-bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--et-text);
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: var(--et-space-sm);
+}
+
+p {
+    margin-bottom: var(--et-space-md);
+}
+
+a {
+    color: var(--et-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color var(--et-transition);
+}
+
+a:hover {
+    color: var(--et-primary-hover);
+}
+
+/* ==========================================================================
+   3. Accessibility Invariants (WCAG 2.2 AA)
+   ========================================================================== */
+/* Keyboard Focus Ring */
+:focus-visible {
+    outline: 2px solid var(--et-focus);
+    outline-offset: 2px;
+}
+
+/* Skip Link for screen readers and keyboard users */
+.et-skip-link {
+    position: absolute;
+    top: -50px;
+    left: var(--et-space-md);
+    background: var(--et-primary);
+    color: #ffffff;
+    padding: var(--et-space-sm) var(--et-space-md);
+    z-index: 1000;
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 0 0 var(--et-radius-sm) var(--et-radius-sm);
+    transition: top var(--et-transition);
+}
+
+.et-skip-link:focus-visible {
+    top: 0;
+    outline: 2px solid var(--et-text);
+    outline-offset: 2px;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ==========================================================================
+   4. Layout & Containers
+   ========================================================================== */
+.et-container {
+    width: 100%;
+    max-width: 1040px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--et-space-md);
+    padding-right: var(--et-space-md);
+}
+
+.et-main {
+    flex: 1 0 auto;
+    padding-top: var(--et-space-xl);
+    padding-bottom: var(--et-space-xl);
+}
+
+/* Header & Navigation */
+.et-header {
+    background-color: var(--et-surface);
+    border-bottom: 1px solid var(--et-border-light);
+    box-shadow: var(--et-shadow-sm);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.et-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 64px;
+    gap: var(--et-space-md);
+    flex-wrap: wrap;
+    padding-top: var(--et-space-xs);
+    padding-bottom: var(--et-space-xs);
+}
+
+.et-brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--et-primary);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+.et-brand:hover {
+    color: var(--et-primary-hover);
+    text-decoration: none;
+}
+
+.et-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--et-space-md);
+    flex-wrap: wrap;
+}
+
+.et-nav__link {
+    color: var(--et-text);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    padding: var(--et-space-sm) var(--et-space-xs);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    border-bottom: 2px solid transparent;
+    transition: color var(--et-transition), border-color var(--et-transition);
+}
+
+.et-nav__link:hover {
+    color: var(--et-primary);
+    text-decoration: none;
+    border-bottom-color: var(--et-primary-light);
+}
+
+.et-logout-form {
+    display: inline-flex;
+    align-items: center;
+}
+
+.et-logout-btn {
+    background: none;
+    border: none;
+    padding: var(--et-space-sm) var(--et-space-xs);
+    font-family: inherit;
+    font-size: 0.95rem;
+    color: var(--et-text-muted);
+    cursor: pointer;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    transition: color var(--et-transition);
+}
+
+.et-logout-btn:hover {
+    color: var(--et-danger);
+    text-decoration: underline;
+}
+
+/* Footer */
+.et-footer {
+    background-color: var(--et-surface);
+    border-top: 1px solid var(--et-border-light);
+    padding: var(--et-space-lg) 0;
+    margin-top: auto;
+    font-size: 0.875rem;
+    color: var(--et-text-muted);
+    text-align: center;
+}
+
+.et-footer__inner p {
+    margin-bottom: 0;
+}
+
+/* ==========================================================================
+   5. Components: Cards & Surface
+   ========================================================================== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.et-card {
+    background-color: var(--et-surface);
+    border: 1px solid var(--et-border);
+    border-radius: var(--et-radius-md);
+    box-shadow: var(--et-shadow-sm);
+    padding: var(--et-space-lg);
+    margin-bottom: var(--et-space-lg);
+    animation: fadeIn 0.25s ease-out;
+}
+
+.et-card__header {
+    border-bottom: 1px solid var(--et-border-light);
+    padding-bottom: var(--et-space-md);
+    margin-bottom: var(--et-space-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--et-space-sm);
+}
+
+.et-card__title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0;
+}
+
+/* ==========================================================================
+   6. Components: Buttons
+   ========================================================================== */
+.et-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--et-font-sans);
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 18px;
+    border-radius: var(--et-radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color var(--et-transition), border-color var(--et-transition), box-shadow var(--et-transition);
+}
+
+.et-btn--primary {
+    background-color: var(--et-primary);
+    color: #ffffff;
+    border-color: var(--et-primary);
+}
+
+.et-btn--primary:hover {
+    background-color: var(--et-primary-hover);
+    border-color: var(--et-primary-hover);
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.et-btn--primary:active {
+    background-color: var(--et-primary-active);
+}
+
+.et-btn--secondary {
+    background-color: var(--et-surface);
+    color: var(--et-text);
+    border-color: var(--et-border);
+}
+
+.et-btn--secondary:hover {
+    background-color: var(--et-bg);
+    border-color: var(--et-border);
+    color: var(--et-text);
+    text-decoration: none;
+}
+
+.et-btn--danger {
+    background-color: var(--et-danger);
+    color: #ffffff;
+    border-color: var(--et-danger);
+}
+
+.et-btn--danger:hover {
+    background-color: #962d22;
+    border-color: #962d22;
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.et-btn--sm {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+}
+
+.et-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.et-btn.is-loading {
+    opacity: 0.9;
+    cursor: wait;
+    position: relative;
+    padding-right: 36px;
+}
+
+.et-btn.is-loading::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: et-spin 0.6s linear infinite;
+}
+
+@keyframes et-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   7. Components: Forms & Controls
+   ========================================================================== */
+.et-form {
+    width: 100%;
+}
+
+.et-form__group {
+    margin-bottom: var(--et-space-md);
+}
+
+.et-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--et-text);
+    margin-bottom: var(--et-space-xs);
+}
+
+.et-input,
+.et-select,
+.et-textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--et-text);
+    background-color: var(--et-surface);
+    border: 1px solid var(--et-border);
+    border-radius: var(--et-radius-sm);
+    transition: border-color var(--et-transition), box-shadow var(--et-transition);
+}
+
+.et-input:focus-visible,
+.et-select:focus-visible,
+.et-textarea:focus-visible {
+    border-color: var(--et-primary);
+    box-shadow: 0 0 0 3px var(--et-primary-light);
+    outline: 2px solid var(--et-focus);
+    outline-offset: 1px;
+}
+
+.et-form__help {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--et-text-muted);
+    margin-top: var(--et-space-xs);
+}
+
+.et-form__error {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--et-danger);
+    font-weight: 500;
+    margin-top: var(--et-space-xs);
+}
+
+/* ==========================================================================
+   8. Components: Progress Bar
+   ========================================================================== */
+.et-progress {
+    width: 100%;
+    height: 16px;
+    background-color: var(--et-border-light);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.et-progress__bar {
+    height: 100%;
+    background-color: var(--et-primary);
+    border-radius: 999px;
+    transition: width 0.4s ease-out, background-color var(--et-transition);
+}
+
+.et-progress__bar--warn {
+    background-color: var(--et-warn);
+}
+
+.et-progress__bar--danger {
+    background-color: var(--et-danger);
+}
+
+/* ==========================================================================
+   9. Components: Tables
+   ========================================================================== */
+.et-table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: var(--et-space-md);
+}
+
+.et-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    text-align: left;
+}
+
+.et-table th,
+.et-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--et-border-light);
+    vertical-align: middle;
+}
+
+.et-table th {
+    background-color: var(--et-bg);
+    font-weight: 600;
+    color: var(--et-text);
+    border-bottom: 2px solid var(--et-border);
+}
+
+.et-table tbody tr:hover {
+    background-color: #fafbfc;
+}
+
+/* ==========================================================================
+   10. Components: Flash Messages & Alerts
+   ========================================================================== */
+.et-messages {
+    margin-bottom: var(--et-space-lg);
+}
+
+.et-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    margin-bottom: var(--et-space-sm);
+    border-radius: var(--et-radius-sm);
+    border: 1px solid transparent;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.et-alert--success {
+    background-color: var(--et-success-bg);
+    color: var(--et-success-text);
+    border-color: var(--et-success-border);
+}
+
+.et-alert--warning,
+.et-alert--warn {
+    background-color: var(--et-warn-bg);
+    color: var(--et-warn-text);
+    border-color: var(--et-warn-border);
+}
+
+.et-alert--error,
+.et-alert--danger {
+    background-color: var(--et-danger-bg);
+    color: var(--et-danger-text);
+    border-color: var(--et-danger-border);
+}
+
+.et-alert--info {
+    background-color: var(--et-info-bg);
+    color: var(--et-info-text);
+    border-color: var(--et-info-border);
+}
+
+.et-alert--debug {
+    background-color: var(--et-bg);
+    color: var(--et-text-muted);
+    border-color: var(--et-border);
+}
+
+.et-alert__close {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: var(--et-space-xs);
+    margin-left: var(--et-space-md);
+    opacity: 0.7;
+    min-height: 32px;
+    min-width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--et-radius-sm);
+}
+
+.et-alert__close:hover {
+    opacity: 1;
+}

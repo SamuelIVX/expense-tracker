@@ -4,10 +4,15 @@ Tests for tracker application infrastructure, models, and commands.
 
 from decimal import Decimal
 from datetime import date
-from django.test import SimpleTestCase, TestCase
+from pathlib import Path
+from django.test import SimpleTestCase, TestCase, RequestFactory
 from django.urls import reverse
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, AnonymousUser
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.messages import SUCCESS, ERROR
+from django.contrib.staticfiles import finders
+from django.template.loader import render_to_string
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import ProtectedError
@@ -196,3 +201,116 @@ class SeedCategoriesCommandTests(TestCase):
         call_command('seed_categories')
         count_after_second = Category.objects.count()
         self.assertEqual(count_after_first, count_after_second)
+
+class FrontendDesignSystemTests(TestCase):
+    """Verifies Spec 03 Frontend Design System: base template, tokens, accessibility, and nav states."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(username="alex", password="password123")
+
+    def test_base_template_unauthenticated_nav(self):
+        """Anonymous visitor sees branding, Login, and Register links; no authenticated nav items."""
+        request = self.factory.get('/')
+        request.user = AnonymousUser()
+        rendered = render_to_string('base.html', {'user': request.user}, request=request)
+
+        self.assertIn('ExpenseTracker', rendered)
+        self.assertIn(f'href="{reverse("login")}"', rendered)
+        self.assertIn(f'href="{reverse("register")}"', rendered)
+        self.assertNotIn(f'href="{reverse("dashboard")}"', rendered)
+        self.assertNotIn(f'action="{reverse("logout")}"', rendered)
+
+    def test_base_template_authenticated_nav(self):
+        """Authenticated user sees Dashboard, Add Expense, History, and Logout with username."""
+        request = self.factory.get('/')
+        request.user = self.user
+        rendered = render_to_string('base.html', {'user': request.user}, request=request)
+
+        self.assertIn('ExpenseTracker', rendered)
+        self.assertIn(f'href="{reverse("dashboard")}"', rendered)
+        self.assertIn(f'href="{reverse("add_transaction")}"', rendered)
+        self.assertIn(f'href="{reverse("transaction_history")}"', rendered)
+        self.assertIn(f'action="{reverse("logout")}"', rendered)
+        self.assertIn('Logout (alex)', rendered)
+        self.assertNotIn(f'href="{reverse("login")}"', rendered)
+        self.assertNotIn(f'href="{reverse("register")}"', rendered)
+
+    def test_base_template_accessibility_landmarks(self):
+        """Template renders required semantic landmarks and accessibility controls."""
+        request = self.factory.get('/')
+        request.user = AnonymousUser()
+        rendered = render_to_string('base.html', {'user': request.user}, request=request)
+
+        # WCAG landmarks and controls
+        self.assertIn('class="et-skip-link"', rendered)
+        self.assertIn('href="#main-content"', rendered)
+        self.assertIn('<header class="et-header" role="banner">', rendered)
+        self.assertIn('<main id="main-content" class="et-main et-container" tabindex="-1">', rendered)
+        self.assertIn('<footer class="et-footer" role="contentinfo">', rendered)
+        self.assertIn('aria-label="Main Navigation"', rendered)
+        self.assertIn('<meta name="viewport" content="width=device-width, initial-scale=1.0">', rendered)
+        self.assertIn('CSC 226 — Web Database Applications', rendered)
+
+    def test_django_messages_live_announcement(self):
+        """Messages framework renders alerts with role='status' for info/success and role='alert' for errors."""
+        request = self.factory.get('/')
+        request.user = AnonymousUser()
+        setattr(request, 'session', {})
+        messages = FallbackStorage(request)
+        setattr(request, '_messages', messages)
+        messages.add(SUCCESS, "Transaction created successfully.")
+        messages.add(ERROR, "Could not save transaction.")
+
+        rendered = render_to_string('base.html', {'messages': messages, 'user': request.user}, request=request)
+
+        self.assertIn('et-alert--success', rendered)
+        self.assertIn('role="status"', rendered)
+        self.assertIn('Transaction created successfully.', rendered)
+        self.assertIn('et-alert--error', rendered)
+        self.assertIn('role="alert"', rendered)
+        self.assertIn('Could not save transaction.', rendered)
+
+    def test_static_css_and_js_exist(self):
+        """Static style.css and ui.js files resolve cleanly through Django static finders."""
+        css_found = finders.find('css/style.css')
+        js_found = finders.find('js/ui.js')
+
+        self.assertIsNotNone(css_found)
+        self.assertIsNotNone(js_found)
+        self.assertTrue(Path(css_found).is_file())
+        self.assertTrue(Path(js_found).is_file())
+
+    def test_logout_post_clears_session(self):
+        """POST /logout/ terminates user session and redirects to login."""
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('logout'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('login'))
+
+        # Verify session is flushed and user is unauthenticated
+        response_check = self.client.get(reverse('index'))
+        self.assertFalse(response_check.wsgi_request.user.is_authenticated)
+
+    def test_scaffold_routes_reach_distinct_endpoints(self):
+        """Verifies each advertised scaffold route resolves with proper auth protection."""
+        protected_routes = ['dashboard', 'add_transaction', 'transaction_history']
+        public_routes = ['login', 'register']
+
+        # Unauthenticated: protected routes redirect to login
+        for route_name in protected_routes:
+            url = reverse(route_name)
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 302)
+            self.assertIn(reverse('login'), response.url)
+
+        # Authenticated: protected routes return HTTP 200
+        self.client.force_login(self.user)
+        for route_name in protected_routes:
+            response = self.client.get(reverse(route_name))
+            self.assertEqual(response.status_code, 200)
+
+        # Public routes return HTTP 200
+        for route_name in public_routes:
+            response = self.client.get(reverse(route_name))
+            self.assertEqual(response.status_code, 200)
