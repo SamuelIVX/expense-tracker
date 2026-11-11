@@ -22,6 +22,8 @@ from django.core.management import call_command
 from unittest.mock import patch
 from urllib.parse import quote
 import importlib
+import json
+import re
 import sys
 import pymysql
 from expense_tracker import settings as app_settings
@@ -702,6 +704,139 @@ class DashboardViewTests(TestCase):
         self.assertEqual(len(recent), 5)
         self.assertEqual(recent[0]['note'], "Tx #7")
         self.assertEqual(recent[4]['note'], "Tx #3")
+
+class DashboardChartTests(TestCase):
+    """Verifies Spec 08 Stretch Feature: Spending Breakdown Chart (Chart.js via CDN with SRI)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="chartuser", password="ValidPass123!")
+        self.other_user = User.objects.create_user(username="otherchartuser", password="ValidPass123!")
+        self.cat_food = Category.objects.create(name="Food", color="#FF5733")
+        self.cat_transport = Category.objects.create(name="Transport", color="#33A8FF")
+        self.cat_entertainment = Category.objects.create(name="Entertainment", color="#A233FF")
+
+    def test_chart_canvas_and_cdn_rendered_when_expenses_exist(self):
+        """When spending exists in the current month, canvas and CDN script with SRI are rendered."""
+        today = timezone.localdate()
+        Transaction.objects.create(
+            user=self.user,
+            category=self.cat_food,
+            amount=Decimal('120.50'),
+            tx_date=today,
+            note="Groceries"
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        # Context JSON payload verification
+        self.assertIn('category_breakdown_data', response.context)
+        self.assertIn('category_breakdown_json', response.context)
+        self.assertEqual(len(response.context['category_breakdown_data']), 1)
+        data = json.loads(response.context['category_breakdown_json'])
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['name'], "Food")
+        self.assertEqual(data[0]['color'], "#FF5733")
+        self.assertEqual(data[0]['total'], 120.50)
+        self.assertEqual(data[0]['percentage'], 100.0)
+
+        # HTML canvas, accessible description, and CDN SRI verification
+        self.assertContains(response, '<table class="et-table" id="categoryBreakdownTable">')
+        self.assertContains(response, '<canvas id="categoryChart"')
+        self.assertContains(response, 'role="img"')
+        self.assertContains(response, 'aria-label="Horizontal bar chart showing spending by category"')
+        self.assertContains(response, 'aria-describedby="categoryBreakdownTable"')
+        self.assertContains(response, '<script id="category-breakdown-data" type="application/json">')
+        self.assertContains(response, 'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js')
+        self.assertContains(response, 'integrity="sha256-')
+        self.assertContains(response, 'crossorigin="anonymous"')
+        self.assertContains(response, "if (typeof Chart === 'undefined') return;")
+        self.assertContains(response, "new Chart(ctx,")
+
+    def test_chart_canvas_and_cdn_not_rendered_when_zero_expenses(self):
+        """When no expenses exist in the current month, chart canvas and CDN scripts are omitted."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        self.assertIn('category_breakdown_json', response.context)
+        self.assertEqual(response.context['category_breakdown_json'], "[]")
+
+        # Must not render canvas or load CDN script
+        self.assertNotContains(response, '<canvas id="categoryChart"')
+        self.assertNotContains(response, 'chart.umd.min.js')
+        self.assertNotContains(response, "new Chart(ctx,")
+
+    def test_chart_multi_category_aggregation_and_ordering(self):
+        """Chart JSON encodes all categories ordered descending by spending with matching colors."""
+        today = timezone.localdate()
+        Transaction.objects.create(user=self.user, category=self.cat_transport, amount=Decimal('40.00'), tx_date=today)
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('160.00'), tx_date=today)
+        Transaction.objects.create(user=self.user, category=self.cat_entertainment, amount=Decimal('80.00'), tx_date=today)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        data = json.loads(response.context['category_breakdown_json'])
+        self.assertEqual(len(data), 3)
+
+        # Descending order: Food ($160) -> Entertainment ($80) -> Transport ($40)
+        self.assertEqual(data[0]['name'], "Food")
+        self.assertEqual(data[0]['total'], 160.00)
+        self.assertEqual(data[0]['color'], "#FF5733")
+
+        self.assertEqual(data[1]['name'], "Entertainment")
+        self.assertEqual(data[1]['total'], 80.00)
+        self.assertEqual(data[1]['color'], "#A233FF")
+
+        self.assertEqual(data[2]['name'], "Transport")
+        self.assertEqual(data[2]['total'], 40.00)
+        self.assertEqual(data[2]['color'], "#33A8FF")
+
+    def test_chart_user_data_isolation(self):
+        """User only sees their own expenses in the chart breakdown payload."""
+        today = timezone.localdate()
+        # Other user has spending
+        Transaction.objects.create(user=self.other_user, category=self.cat_food, amount=Decimal('500.00'), tx_date=today)
+
+        # Current user has no spending
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['category_breakdown_json'], "[]")
+        self.assertNotContains(response, '<canvas id="categoryChart"')
+
+        # Current user adds their own expense
+        Transaction.objects.create(user=self.user, category=self.cat_transport, amount=Decimal('25.00'), tx_date=today)
+        response = self.client.get(reverse('dashboard'))
+        data = json.loads(response.context['category_breakdown_json'])
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['name'], "Transport")
+        self.assertEqual(data[0]['total'], 25.00)
+
+    def test_chart_xss_script_injection_escaped(self):
+        """Category name with script injection is safely encoded without breaking HTML."""
+        today = timezone.localdate()
+        xss_cat = Category.objects.create(name="</script><script>alert('xss')</script>", color="#E74C3C")
+        Transaction.objects.create(user=self.user, category=xss_cat, amount=Decimal('50.00'), tx_date=today)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        # Assert no raw unescaped script tag can break out of JSON data element
+        content = response.content.decode('utf-8')
+        self.assertNotIn("</script><script>alert('xss')</script>", content)
+        self.assertIn('<script id="category-breakdown-data" type="application/json">', content)
+        self.assertIn('\\u003C/script\\u003E', content)
+
+        # Verify JSON parsed from the rendered DOM element matches expected data
+        match = re.search(r'<script id="category-breakdown-data" type="application/json">(.*?)</script>', content)
+        self.assertIsNotNone(match)
+        data = json.loads(match.group(1))
+        self.assertEqual(data[0]['name'], "</script><script>alert('xss')</script>")
+        self.assertEqual(data[0]['total'], 50.00)
 
 class TransactionHistoryViewTests(TestCase):
     """Verifies Spec 07 Transaction History: filtering, searching, pagination, and safe deletion."""
