@@ -1,10 +1,9 @@
 -- CSC 226 - Web Database Applications
 -- Expense Tracker Schema (MySQL 8.0+)
--- Satisfies the 20% Database Design coursework requirement.
 --
 -- STANDALONE REFERENCE SCRIPT:
 -- This script contains raw MySQL 8.0 DDL documenting the normalized 3NF relational
--- schema, indices, foreign-key cascades, and constraint checks for grading review.
+-- schema, indices, foreign-key cascades, and constraint checks.
 --
 -- OPERATIONAL NOTES & DJANGO INTEGRATION:
 -- 1. In production and local development, schema migrations are automatically managed

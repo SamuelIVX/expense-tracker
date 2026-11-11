@@ -7,34 +7,19 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)](https://www.mysql.com/)
 [![Tests](https://img.shields.io/badge/Tests-61%20Passing-brightgreen.svg)](tracker/tests.py)
 
-A secure, database-driven web application for tracking and analyzing personal daily expenditures. Built for **CSC 226: Web Database Applications** (Fall 2026, taught by Professor Joseph Tooker), this application allows authenticated users to log expenses, monitor monthly spending targets with a dynamic budget progress bar, visualize category breakdowns using an interactive Chart.js bar chart, and filter past transaction history.
+A secure, database-driven web application for tracking and analyzing personal daily expenditures. Built for **CSC 226: Web Database Applications** (Fall 2026), this application allows authenticated users to log expenses, monitor monthly spending targets with a dynamic budget progress bar, visualize category breakdowns using an interactive Chart.js bar chart, and filter past transaction history.
 
-The application satisfies the course's 50% project grading weight by demonstrating proficiency in **Relational Database Design (20%)**, **User Interface Craftsmanship (10%)**, and **Full-Stack Integration, Security & Authentication (20%)**.
+The application demonstrates proficiency in **Relational Database Design**, **User Interface Craftsmanship**, and **Full-Stack Integration, Security & Authentication**.
 
 ---
 
 ## Table of Contents
-- [Team Members & Contributions](#team-members--contributions)
 - [Tech Stack & Architecture](#tech-stack--architecture)
-- [CSC 226 Course Rubric Mapping](#csc-226-course-rubric-mapping)
+- [Core Technical Pillars](#core-technical-pillars)
 - [Feature Checklist](#feature-checklist)
 - [Database Schema (3NF)](#database-schema-3nf)
 - [Setup & Installation Guide](#setup--installation-guide)
 - [Running Automated Tests](#running-automated-tests)
-- [Presentation Walkthrough](#presentation-walkthrough)
-
----
-
-## Team Members & Contributions
-
-- **Course:** CSC 226 — Web Database Applications (Fall 2026)
-- **Instructor:** Professor Joseph Tooker
-- **Primary Developer:** Samuel Hernandez ([@SamuelIVX](https://github.com/SamuelIVX))
-  - **Database Architecture:** Authored normalized 3NF MySQL schema DDL (`schema.sql`), Django data models (`tracker/models.py`), constraints, and composite indexes.
-  - **SQL Query Engine:** Implemented parameterized raw SQL queries in `tracker/queries.py` for monthly aggregations, category breakdowns, and multi-parameter filtering.
-  - **Frontend Design System:** Created WCAG 2.2 AA compliant CSS custom properties design tokens (`static/css/style.css`), accessible base layout (`templates/base.html`), and client-side UI feedback scripts (`static/js/ui.js`).
-  - **Security & Authentication:** Configured PBKDF2 authentication, CSRF defenses, session cookies, row-level data isolation, and CDN Subresource Integrity (SRI).
-  - **Test Automation:** Implemented 61 unit and integration tests executed across both in-memory SQLite and local MySQL 8.0 databases.
 
 ---
 
@@ -42,7 +27,7 @@ The application satisfies the course's 50% project grading weight by demonstrati
 
 - **Backend:** Python 3.14 + Django 5.2 (Model-View-Template architecture, session-based authentication, CSRF middleware).
 - **Database:** MySQL 8.0 (InnoDB engine, 3NF schema, foreign key cascades/restrictions, decimal quantization, composite indexing). Connected to Django using `pymysql`.
-- **Frontend:** Semantic HTML5, Vanilla CSS3 Custom Properties (Design Tokens), and Vanilla JavaScript (loading states, double-submit guard, alert dismissal). *Zero heavy frontend frameworks (React/Vue/Tailwind) per course guidelines.*
+- **Frontend:** Semantic HTML5, Vanilla CSS3 Custom Properties (Design Tokens), and Vanilla JavaScript (loading states, double-submit guard, alert dismissal). *Zero heavy frontend frameworks (React/Vue/Tailwind) per project requirements.*
 - **Data Visualization (Stretch):** Chart.js 4.4.2 imported via CDN with Subresource Integrity (`integrity="sha256-..."`), offline guards, and safe JSON script embedding.
 - **Testing & Tooling:** Pytest, `pytest-django`, GitHub Actions CI.
 
@@ -72,11 +57,11 @@ The application satisfies the course's 50% project grading weight by demonstrati
 
 ---
 
-## CSC 226 Course Rubric Mapping
+## Core Technical Pillars
 
-The project directly maps to Professor Tooker's 50% project grading rubric:
+The project is engineered around three foundational pillars:
 
-### 1. Database Design (20% of Course Grade)
+### 1. Database Design
 - **3NF Relational Normalization:** Complete separation of entity domains (`auth_user`, `tracker_category`, `tracker_transaction`), eliminating insertion, update, and deletion anomalies.
 - **Referential Integrity & Cascades:**
   - `fk_tx_user`: References `auth_user(id)` (`INT`) with `ON DELETE CASCADE` in `schema.sql` and `on_delete=models.CASCADE` in Django ORM (deleting a user account cleans up all associated transactions).
@@ -87,7 +72,7 @@ The project directly maps to Professor Tooker's 50% project grading rubric:
 - **Query Optimization Indexing:** Composite index `idx_tx_user_date (user_id, tx_date)` supporting high-performance date-window filtering and dashboard aggregation queries.
 - **Deliverables:** Raw MySQL DDL in [`schema.sql`](schema.sql) (executable in MySQL Workbench) mirroring Django ORM models in [`tracker/models.py`](tracker/models.py).
 
-### 2. User Interface Design & Craftsmanship (10% of Course Grade)
+### 2. User Interface Design & Craftsmanship
 - **Design Tokens System:** Centralized CSS custom properties in [`static/css/style.css`](static/css/style.css) defining brand colors, typography, spacing, surface elevations, and responsive breakpoints.
 - **Accessibility (WCAG 2.2 AA Compliance):**
   - High-contrast color palette (≥ 4.5:1 text-on-background ratio; ≥ 3:1 for interactive controls).
@@ -102,7 +87,7 @@ The project directly maps to Professor Tooker's 50% project grading rubric:
   - Red Danger (≥ 90% of budget)
 - **Interactive Chart Visualization (Stretch):** Chart.js horizontal bar chart paired with an accessible data table (`aria-describedby="categoryBreakdownTable"` and internal screen-reader alternative).
 
-### 3. Full-Stack Integration, Security & Auth (20% of Course Grade)
+### 3. Full-Stack Integration, Security & Auth
 - **Django 5.2 MVT Architecture:** Clean separation of concerns between models, views, and templates.
 - **Parameterized Raw SQL Query Engine:** To prove direct database query proficiency, all dashboard aggregations, monthly summaries, and history filters in [`tracker/queries.py`](tracker/queries.py) are executed via `connection.cursor()` with `%s` DB-API parameterization—strictly immune to SQL injection (OWASP A03).
 - **Authentication & Password Security:**
@@ -125,7 +110,7 @@ The project directly maps to Professor Tooker's 50% project grading rubric:
 - [x] **Dashboard Metrics & Raw SQL (Spec 06):** Parameterized raw SQL aggregation queries, monthly total spending, category breakdown, dynamic budget progress bar.
 - [x] **Transaction History & Filtering (Spec 07):** Filterable history table (by category, month, and note search), 15-item pagination, safe POST-only transaction deletion.
 - [x] **Spending Breakdown Chart (Spec 08 - Stretch):** Interactive horizontal bar chart via CDN with Subresource Integrity (SRI) and accessible dual-table presentation.
-- [x] **Submission Deliverables (Spec 09):** Comprehensive `README.md`, demonstration script [`WALKTHROUGH.md`](WALKTHROUGH.md), rubric compliance matrix.
+- [x] **Project Documentation (Spec 09):** Comprehensive `README.md` detailing architecture, setup, testing, and security.
 
 ---
 
@@ -225,7 +210,7 @@ python manage.py migrate
 python manage.py seed_categories
 ```
 
-> **Note on `schema.sql`:** [`schema.sql`](schema.sql) contains the standalone MySQL 8.0 DDL reference script illustrating the 3NF schema, check constraints, and composite indexes for grading review in MySQL Workbench.
+> **Note on `schema.sql`:** [`schema.sql`](schema.sql) contains the standalone MySQL 8.0 DDL reference script illustrating the 3NF schema, check constraints, and composite indexes for inspection in MySQL Workbench.
 
 ### 7. Start the Local Server
 ```bash
@@ -253,10 +238,3 @@ python -m pytest --ds=expense_tracker.test_settings -v
 ```
 
 All 61 tests pass cleanly on both backends.
-
----
-
-## Presentation Walkthrough
-
-For a step-by-step 3-minute demonstration script for class presentation or grading review, see:  
-📖 **[`WALKTHROUGH.md`](WALKTHROUGH.md)**
