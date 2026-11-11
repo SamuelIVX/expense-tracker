@@ -1,13 +1,156 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Dashboard — Expense Tracker{% endblock %}
 
 {% block content %}
-<div class="et-page-header">
-    <h1 class="et-card__title" style="font-size: 1.5rem; margin-bottom: var(--et-space-sm);">Dashboard</h1>
-    <p style="color: var(--et-text-muted); margin-bottom: var(--et-space-lg);">Welcome back, {{ user.username }}. Your spending overview will appear here.</p>
+<div class="et-card__header" style="border: none; padding-bottom: 0; margin-bottom: var(--et-space-lg);">
+    <div>
+        <h1 class="et-card__title" style="font-size: 1.75rem;">Dashboard</h1>
+        <p style="color: var(--et-text-muted); margin-top: var(--et-space-xs); margin-bottom: 0;">Spending overview for {{ month_name }}</p>
+    </div>
+    <div>
+        <a href="{% url 'add_transaction' %}" class="et-btn et-btn--primary">+ Add Expense</a>
+    </div>
 </div>
+
+<!-- Stat Cards -->
+<div class="et-stat-grid">
+    <div class="et-stat">
+        <div class="et-stat__label">Total Spent This Month</div>
+        <div class="et-stat__value">${{ total_spent|floatformat:2 }}</div>
+        <p class="et-stat__subtext">{{ tx_count }} transaction{{ tx_count|pluralize }} recorded</p>
+    </div>
+
+    <div class="et-stat">
+        <div class="et-stat__label">Monthly Budget Benchmark</div>
+        <div class="et-stat__value">${{ budget|floatformat:2 }}</div>
+        <p class="et-stat__subtext">Target baseline</p>
+    </div>
+
+    <div class="et-stat">
+        <div class="et-stat__label">{% if is_over_budget %}Over Budget{% else %}Budget Remaining{% endif %}</div>
+        <div class="et-stat__value" style="color: {% if is_over_budget %}var(--et-danger){% else %}var(--et-success){% endif %};">
+            {% if is_over_budget %}
+                -${{ over_budget_amount|floatformat:2 }}
+            {% else %}
+                ${{ budget_remaining|floatformat:2 }}
+            {% endif %}
+        </div>
+        <p class="et-stat__subtext">{{ budget_percentage }}% of budget consumed</p>
+    </div>
+</div>
+
+<!-- Budget Progress Indicator -->
 <div class="et-card">
-    <p style="margin: 0; color: var(--et-text-muted);">Dashboard analytics and budget progress will be active shortly.</p>
+    <div class="et-card__header">
+        <h2 class="et-card__title">Monthly Budget Progress</h2>
+        <span style="font-size: 0.875rem; font-weight: 600; color: var(--et-text-muted);">
+            ${{ total_spent|floatformat:2 }} / ${{ budget|floatformat:2 }}
+        </span>
+    </div>
+
+    <div class="et-progress-meta">
+        <span>{{ budget_percentage }}% used</span>
+        <span>
+            {% if is_over_budget %}
+                <strong style="color: var(--et-danger);">Exceeded target by ${{ over_budget_amount|floatformat:2 }}</strong>
+            {% else %}
+                ${{ budget_remaining|floatformat:2 }} available
+            {% endif %}
+        </span>
+    </div>
+
+    <div class="et-progress" role="progressbar" aria-valuenow="{{ progress_width|unlocalize }}" aria-valuemin="0" aria-valuemax="100" aria-label="Monthly budget used ({{ budget_percentage }}%)">
+        <div class="et-progress__bar {{ progress_class }}" style="width: {{ progress_width|unlocalize }}%;"></div>
+    </div>
+</div>
+
+<!-- Category Breakdown & Recent Expenses Grid -->
+<div class="et-grid">
+    <!-- Category Spending -->
+    <div class="et-card">
+        <div class="et-card__header">
+            <h2 class="et-card__title">Spending by Category</h2>
+            <span style="font-size: 0.8125rem; color: var(--et-text-muted);">{{ month_name }}</span>
+        </div>
+
+        {% if category_breakdown %}
+            <div class="et-table-responsive" style="margin-bottom: 0;">
+                <table class="et-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Category</th>
+                            <th scope="col" style="text-align: right;">Spent</th>
+                            <th scope="col" style="text-align: right;">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cat in category_breakdown %}
+                            <tr>
+                                <td>
+                                    <span class="et-badge">
+                                        <span class="et-badge__dot" style="background-color: {{ cat.color }};"></span>
+                                        {{ cat.name }}
+                                    </span>
+                                </td>
+                                <td style="text-align: right; font-weight: 600;">${{ cat.total|floatformat:2 }}</td>
+                                <td style="text-align: right; color: var(--et-text-muted); font-size: 0.875rem;">{{ cat.percentage }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="et-empty-state">
+                <p style="margin-bottom: var(--et-space-sm);">No spending recorded for {{ month_name }}.</p>
+                <a href="{% url 'add_transaction' %}" class="et-btn et-btn--secondary et-btn--sm">Add an Expense</a>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="et-card">
+        <div class="et-card__header">
+            <h2 class="et-card__title">Recent Activity</h2>
+            <a href="{% url 'transaction_history' %}" class="et-btn et-btn--secondary et-btn--sm">View All</a>
+        </div>
+
+        {% if recent_transactions %}
+            <div class="et-table-responsive" style="margin-bottom: 0;">
+                <table class="et-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Category</th>
+                            <th scope="col" style="text-align: right;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in recent_transactions %}
+                            <tr>
+                                <td style="color: var(--et-text-muted); font-size: 0.875rem;">{{ tx.tx_date }}</td>
+                                <td>
+                                    <span class="et-badge">
+                                        <span class="et-badge__dot" style="background-color: {{ tx.category_color }};"></span>
+                                        {{ tx.category_name }}
+                                    </span>
+                                    {% if tx.note %}
+                                        <div style="font-size: 0.8125rem; color: var(--et-text-muted); margin-top: 2px;">{{ tx.note }}</div>
+                                    {% endif %}
+                                </td>
+                                <td style="text-align: right; font-weight: 600;">${{ tx.amount|floatformat:2 }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="et-empty-state">
+                <p style="margin-bottom: var(--et-space-sm);">No transactions recorded yet.</p>
+                <a href="{% url 'add_transaction' %}" class="et-btn et-btn--secondary et-btn--sm">Log Your First Expense</a>
+            </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
