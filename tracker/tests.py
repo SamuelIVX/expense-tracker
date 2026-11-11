@@ -557,3 +557,148 @@ class AddTransactionViewTests(TestCase):
         self.assertContains(response, 'aria-invalid="true"')
         self.assertContains(response, 'aria-describedby="id_amount-error"')
         self.assertContains(response, 'id="id_amount-error"')
+
+class DashboardViewTests(TestCase):
+    """Verifies Spec 06 Dashboard: raw SQL aggregation, budget progress bar, isolation, and limits."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="dashuser", password="ValidPass123!")
+        self.other_user = User.objects.create_user(username="otherdashuser", password="ValidPass123!")
+        self.cat_food = Category.objects.create(name="Food", color="#FF5733")
+        self.cat_transport = Category.objects.create(name="Transport", color="#33A8FF")
+
+    def test_unauthenticated_user_redirected_to_login(self):
+        """Anonymous access to /dashboard/ redirects to login with next parameter."""
+        response = self.client.get(reverse('dashboard'))
+        self.assertRedirects(response, f"{reverse('login')}?next={reverse('dashboard')}", fetch_redirect_response=False)
+
+    def test_dashboard_empty_state_for_new_user(self):
+        """New user with no transactions sees zero totals, 0% budget used, and empty state prompts."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'tracker/dashboard.html')
+        self.assertEqual(response.context['total_spent'], Decimal('0'))
+        self.assertEqual(response.context['tx_count'], 0)
+        self.assertEqual(response.context['budget_percentage'], 0.0)
+        self.assertContains(response, "$0.00")
+        self.assertContains(response, "No spending recorded")
+        self.assertContains(response, "No transactions recorded yet")
+
+    def test_dashboard_aggregates_current_month_spending(self):
+        """Transactions in current month are aggregated by raw SQL into totals and category shares."""
+        today = timezone.localdate()
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('150.00'), tx_date=today)
+        Transaction.objects.create(user=self.user, category=self.cat_transport, amount=Decimal('50.00'), tx_date=today)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(response.context['total_spent'], Decimal('200.00'))
+        self.assertEqual(response.context['tx_count'], 2)
+        self.assertEqual(response.context['budget_percentage'], 20.0)
+        self.assertEqual(response.context['budget_remaining'], Decimal('800.00'))
+
+        breakdown = response.context['category_breakdown']
+        self.assertEqual(len(breakdown), 2)
+        # Food should be first (150.00 > 50.00)
+        self.assertEqual(breakdown[0]['name'], "Food")
+        self.assertEqual(breakdown[0]['total'], Decimal('150.00'))
+        self.assertEqual(breakdown[0]['percentage'], 75.0)
+
+        self.assertEqual(breakdown[1]['name'], "Transport")
+        self.assertEqual(breakdown[1]['total'], Decimal('50.00'))
+        self.assertEqual(breakdown[1]['percentage'], 25.0)
+
+    def test_dashboard_excludes_other_months(self):
+        """Transactions from previous or future months do not affect current month analytics."""
+        import calendar
+        today = timezone.localdate()
+        start_of_month = today.replace(day=1)
+        _, last_day = calendar.monthrange(today.year, today.month)
+        end_of_month = today.replace(day=last_day)
+
+        # Boundary transactions inside current month (inclusive start and end)
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('25.00'), tx_date=start_of_month)
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('50.00'), tx_date=end_of_month)
+
+        # Transactions outside month boundary
+        # Day before start of month
+        prev_date = date(today.year - 1 if today.month == 1 else today.year, 12 if today.month == 1 else today.month - 1, 28)
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('500.00'), tx_date=prev_date)
+        # First day of next month
+        next_date = date(today.year + 1 if today.month == 12 else today.year, 1 if today.month == 12 else today.month + 1, 1)
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('300.00'), tx_date=next_date)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['total_spent'], Decimal('75.00'))
+        self.assertEqual(response.context['tx_count'], 2)
+
+    def test_dashboard_isolates_user_data(self):
+        """Spending from other users is strictly excluded from the dashboard metrics."""
+        today = timezone.localdate()
+        Transaction.objects.create(user=self.other_user, category=self.cat_food, amount=Decimal('999.00'), tx_date=today)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['total_spent'], Decimal('0'))
+        self.assertEqual(response.context['tx_count'], 0)
+        self.assertEqual(len(response.context['category_breakdown']), 0)
+        self.assertEqual(len(response.context['recent_transactions']), 0)
+
+    def test_dashboard_budget_progress_thresholds_and_clamping(self):
+        """Progress bar applies warning at >=70%, danger at >=90%, and clamps width at 100%."""
+        today = timezone.localdate()
+        self.client.force_login(self.user)
+
+        # Baseline < 70%
+        tx = Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('500.00'), tx_date=today)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['progress_class'], "")
+        self.assertEqual(response.context['progress_width'], 50.0)
+
+        # Warning >= 70%
+        tx.amount = Decimal('750.00')
+        tx.save()
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['progress_class'], "et-progress__bar--warn")
+        self.assertEqual(response.context['progress_width'], 75.0)
+
+        # Danger >= 90%
+        tx.amount = Decimal('920.00')
+        tx.save()
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['progress_class'], "et-progress__bar--danger")
+        self.assertEqual(response.context['progress_width'], 92.0)
+
+        # Over budget (> 100%): clamped at 100% width
+        tx.amount = Decimal('1250.00')
+        tx.save()
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['progress_class'], "et-progress__bar--danger")
+        self.assertEqual(response.context['progress_width'], 100.0)
+        self.assertTrue(response.context['is_over_budget'])
+        self.assertEqual(response.context['over_budget_amount'], Decimal('250.00'))
+        self.assertContains(response, 'role="progressbar"')
+        self.assertContains(response, 'aria-valuenow="100.0"')
+
+    def test_dashboard_recent_transactions_capped_at_five_and_ordered(self):
+        """Dashboard lists at most 5 recent transactions ordered descending by date and id."""
+        today = timezone.localdate()
+        for i in range(1, 8):
+            Transaction.objects.create(
+                user=self.user,
+                category=self.cat_food,
+                amount=Decimal(f'{i * 10}.00'),
+                tx_date=today,
+                note=f"Tx #{i}"
+            )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('dashboard'))
+        recent = response.context['recent_transactions']
+        self.assertEqual(len(recent), 5)
+        self.assertEqual(recent[0]['note'], "Tx #7")
+        self.assertEqual(recent[4]['note'], "Tx #3")

@@ -2,6 +2,11 @@
 Constants and static metadata for the tracker application.
 """
 
+from decimal import Decimal
+
+# Default monthly budget benchmark for progress bar visualization
+DEFAULT_MONTHLY_BUDGET = Decimal('1000.00')
+
 # Default expense categories for v1 (mirrored in schema.sql for manual DDL setup)
 DEFAULT_CATEGORIES = [
     ('Food', '#FF5733'),

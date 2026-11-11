@@ -637,3 +637,85 @@ a:hover {
 .et-alert__close:hover {
     opacity: 1;
 }
+
+/* ==========================================================================
+   11. Components: Dashboard & Analytics
+   ========================================================================== */
+.et-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--et-space-lg);
+    margin-bottom: var(--et-space-lg);
+}
+
+.et-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--et-space-md);
+    margin-bottom: var(--et-space-lg);
+}
+
+.et-stat {
+    padding: var(--et-space-md);
+    background-color: var(--et-surface);
+    border: 1px solid var(--et-border);
+    border-radius: var(--et-radius-md);
+    box-shadow: var(--et-shadow-sm);
+}
+
+.et-stat__label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--et-text-muted);
+    margin-bottom: var(--et-space-xs);
+}
+
+.et-stat__value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--et-text);
+    line-height: 1.2;
+    margin-bottom: var(--et-space-xs);
+}
+
+.et-stat__subtext {
+    font-size: 0.875rem;
+    color: var(--et-text-muted);
+    margin: 0;
+}
+
+.et-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    background-color: var(--et-bg);
+    color: var(--et-text);
+    border: 1px solid var(--et-border-light);
+}
+
+.et-badge__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.et-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    margin-bottom: var(--et-space-xs);
+    font-weight: 500;
+}
+
+.et-empty-state {
+    text-align: center;
+    padding: var(--et-space-xl) var(--et-space-md);
+    color: var(--et-text-muted);
+}
