@@ -19,6 +19,7 @@ from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
 from django.core.management import call_command
 from unittest.mock import patch
+from urllib.parse import quote
 import importlib
 import sys
 import pymysql
@@ -312,7 +313,125 @@ class FrontendDesignSystemTests(TestCase):
             response = self.client.get(reverse(route_name))
             self.assertEqual(response.status_code, 200)
 
-        # Public routes return HTTP 200
+        # Public routes: when logged out, return HTTP 200
+        self.client.logout()
         for route_name in public_routes:
             response = self.client.get(reverse(route_name))
             self.assertEqual(response.status_code, 200)
+
+class UserAuthenticationTests(TestCase):
+    """Verifies Spec 04 User Authentication: registration, login, logout, security invariants, and redirects."""
+
+    def setUp(self):
+        self.username = "testuser"
+        self.password = "ValidPass123!"
+        self.user = User.objects.create_user(username=self.username, password=self.password)
+
+    def test_registration_creates_user_and_hashes_password(self):
+        """Valid registration creates user with PBKDF2 hash, signs them in, and redirects to dashboard."""
+        response = self.client.post(reverse('register'), {
+            'username': 'newuser',
+            'password1': 'ComplexPass123!',
+            'password2': 'ComplexPass123!',
+        })
+        self.assertRedirects(response, reverse('dashboard'), fetch_redirect_response=False)
+
+        new_user = User.objects.get(username='newuser')
+        self.assertTrue(new_user.password.startswith('pbkdf2_sha256$'))
+        self.assertNotEqual(new_user.password, 'ComplexPass123!')
+
+        # Verify authenticated session
+        response_check = self.client.get(reverse('index'))
+        self.assertEqual(response_check.wsgi_request.user, new_user)
+
+    def test_registration_duplicate_username_case_insensitive(self):
+        """Registration rejects duplicate usernames regardless of casing."""
+        response = self.client.post(reverse('register'), {
+            'username': 'TestUser',  # existing user is 'testuser'
+            'password1': 'ComplexPass123!',
+            'password2': 'ComplexPass123!',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "A user with that username already exists.")
+        self.assertEqual(User.objects.filter(username__iexact='testuser').count(), 1)
+
+    def test_registration_password_mismatch(self):
+        """Registration rejects mismatched passwords."""
+        response = self.client.post(reverse('register'), {
+            'username': 'differentuser',
+            'password1': 'ComplexPass123!',
+            'password2': 'MismatchedPass123!',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('form', response.context)
+        form = response.context['form']
+        self.assertIn('password2', form.errors)
+        self.assertFalse(User.objects.filter(username='differentuser').exists())
+
+    def test_registration_integrity_error_handled(self):
+        """Concurrent duplicate registration caught by db IntegrityError adds form error."""
+        from tracker.forms import RegisterForm
+        with patch.object(RegisterForm, 'save', side_effect=IntegrityError("Duplicate entry")):
+            response = self.client.post(reverse('register'), {
+                'username': 'uniqueuser',
+                'password1': 'ComplexPass123!',
+                'password2': 'ComplexPass123!',
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('form', response.context)
+            form = response.context['form']
+            self.assertIn('username', form.errors)
+            self.assertIn("A user with that username already exists.", form.errors['username'])
+            self.assertFalse(User.objects.filter(username='uniqueuser').exists())
+
+    def test_login_valid_credentials(self):
+        """Valid login creates session and redirects to dashboard."""
+        response = self.client.post(reverse('login'), {
+            'username': self.username,
+            'password': self.password,
+        })
+        self.assertRedirects(response, reverse('dashboard'), fetch_redirect_response=False)
+
+        response_check = self.client.get(reverse('index'))
+        self.assertEqual(response_check.wsgi_request.user, self.user)
+
+    def test_login_invalid_credentials_non_enumerating(self):
+        """Invalid credentials show non-enumerating error and user remains unauthenticated."""
+        response = self.client.post(reverse('login'), {
+            'username': self.username,
+            'password': 'WrongPassword123!',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please enter a correct username and password")
+
+        response_check = self.client.get(reverse('index'))
+        self.assertFalse(response_check.wsgi_request.user.is_authenticated)
+
+    def test_login_open_redirect_prevented(self):
+        """Supplying an untrusted external URL in ?next safely redirects to dashboard while safe relative URLs work."""
+        # Positive control: safe relative redirect succeeds
+        safe_url = reverse('transaction_history')
+        response_safe = self.client.post(f"{reverse('login')}?next={quote(safe_url)}", {
+            'username': self.username,
+            'password': self.password,
+        })
+        self.assertRedirects(response_safe, safe_url, fetch_redirect_response=False)
+        self.client.logout()
+
+        # Negative control: untrusted external schemes/hosts redirect to default dashboard
+        evil_targets = ['https://evil.com', '//evil.com', 'http://attacker.org/steal']
+        for evil_url in evil_targets:
+            for query_val in (evil_url, quote(evil_url)):
+                response = self.client.post(f"{reverse('login')}?next={query_val}", {
+                    'username': self.username,
+                    'password': self.password,
+                })
+                self.assertRedirects(response, reverse('dashboard'), fetch_redirect_response=False)
+                self.client.logout()
+
+    def test_authenticated_user_redirected_from_auth_pages(self):
+        """Logged-in users visiting login or register are redirected to dashboard."""
+        self.client.force_login(self.user)
+        for route_name in ['login', 'register']:
+            response = self.client.get(reverse(route_name))
+            self.assertRedirects(response, reverse('dashboard'), fetch_redirect_response=False)
