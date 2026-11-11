@@ -14,8 +14,9 @@ The following are **already configured** in the codebase — no action needed:
 - **Multi-engine support** — set `DB_ENGINE=sqlite` for SQLite or `DB_ENGINE=mysql` (default) for MySQL
 - **`.env.example`** exists with all required variable names and a secret-key generation comment
 - **`.env`** is listed in `.gitignore`
-- **`schema.sql`** contains the full DDL with seed categories (teammates can use this to bootstrap their DB)
+- **`schema.sql`** contains reference DDL for MySQL Workbench; use Django migrations to initialize the app
 - **`STATIC_ROOT`** is configured for collected static files
+- **`docker-compose.yml`** and **`Dockerfile`** are included for containerized local setup
 
 ---
 
@@ -25,25 +26,54 @@ The following are **already configured** in the codebase — no action needed:
 |------|-----------------|
 | **Python 3.14+** | `brew install python@3.14` (macOS) or `sudo apt-get install python3` |
 | **Docker & Docker Compose** *(optional but recommended)* | Follow Docker's official installer for your OS |
-| **MySQL client libraries** (required for the `mysqlclient` Python package) | See §1 below |
+
+> The project uses **PyMySQL** as the MySQL driver, so no native MySQL client libraries are needed.
 
 ---
 
-## 1️⃣ System dependencies for the Python MySQL driver
+## 1️⃣ Quick onboarding checklist
 
-The `mysqlclient` package needs native MySQL client libraries **before** `pip install -r requirements.txt`:
+### Option A — Docker (recommended, zero MySQL install)
 
-| OS | Command |
-|----|---------|
-| **macOS** | `brew install mysql-client pkg-config && export PKG_CONFIG_PATH="$(brew --prefix mysql-client)/lib/pkgconfig"` |
-| **Ubuntu/Debian** | `sudo apt-get install libmysqlclient-dev pkg-config python3-dev build-essential` |
-| **Windows** | Use the pre-built wheels from PyPI (no extra system packages required) |
+1. **Clone the repo**
+   ```bash
+   git clone https://github.com/SamuelIVX/expense-tracker.git
+   cd expense-tracker
+   ```
 
-> The project currently uses **PyMySQL** (`pymysql` in `requirements.txt`), so this step may not be needed unless you switch to the C-based `mysqlclient` driver.
+2. **Create your local `.env` file**
+   ```bash
+   cp .env.example .env
+   ```
+   Then generate a secret key and paste it (works without Django installed):
+   ```bash
+   python3 -c "import secrets; print(secrets.token_hex(32))"
+   ```
+   Run the command twice more to generate separate app-database and MySQL root passwords.
+   Edit `.env` and set:
+   - `SECRET_KEY=<the value you just generated>`
+   - `DB_HOST=db` (the Docker service name)
+   - `DB_USER=et_user`
+   - `DB_PASSWORD=<a separately generated database password>`
+   - `MYSQL_ROOT_PASSWORD=<a separately generated root password>`
 
----
+   Compose requires both database passwords to be nonempty. It reads them from your ignored `.env`; no database passwords are supplied in the tracked Compose file.
 
-## 2️⃣ Quick onboarding checklist (what every teammate should do)
+3. **Start everything**
+   ```bash
+   docker compose up -d
+   ```
+   Docker will build the app image, create an empty MySQL database, and launch the Django dev server after an authenticated TCP database healthcheck succeeds. Initialize the tables in the next step before opening the app.
+
+4. **Run migrations & seed categories**
+   ```bash
+   docker compose exec web python manage.py migrate
+   docker compose exec web python manage.py seed_categories
+   ```
+
+5. **Verify** — Open `http://localhost:8000`. Register a new account and confirm you can add transactions.
+
+### Option B — Local MySQL (no Docker)
 
 1. **Clone the repo**
    ```bash
@@ -62,27 +92,19 @@ The `mysqlclient` package needs native MySQL client libraries **before** `pip in
    ```bash
    cp .env.example .env
    ```
-   Then generate a secret key and paste it:
+   Then generate a secret key and paste it (works without Django installed):
    ```bash
-   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   python3 -c "import secrets; print(secrets.token_hex(32))"
    ```
-   Edit `.env` and set `SECRET_KEY=<the value you just generated>`. Update `DB_USER` and `DB_PASSWORD` to match your local MySQL credentials.
+   Edit `.env` and set:
+   - `SECRET_KEY=<the value you just generated>`
+   - `DB_HOST=127.0.0.1`
+   - `DB_USER=root` (or your MySQL user)
+   - `DB_PASSWORD=<your MySQL password>`
 
-4. **Set up the database** — pick one approach:
-
-   **Option A — Local MySQL (no Docker)**
+4. **Set up the database**
    ```bash
-   # Log in to your MySQL server and run the schema:
-   mysql -u root -p < schema.sql
-   # Then run Django migrations to create framework tables:
-   python manage.py migrate
-   # Seed the categories:
-   python manage.py seed_categories
-   ```
-
-   **Option B — Docker** *(see §3 below for the compose file — not yet created)*
-   ```bash
-   docker compose up -d db
+   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS expense_tracker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
    python manage.py migrate
    python manage.py seed_categories
    ```
@@ -91,79 +113,64 @@ The `mysqlclient` package needs native MySQL client libraries **before** `pip in
    ```bash
    python manage.py runserver
    ```
-   > `python-dotenv` automatically loads `.env` — no need to `source` it or `set -a`.
+   > `python-dotenv` automatically loads `.env` — no need to `source` it.
 
 6. **Verify** — Open `http://localhost:8000`. Register a new account and confirm you can add transactions.
 
 ---
 
-## 3️⃣ Docker Compose setup (NOT YET CREATED)
+## 2️⃣ Docker reference
 
-> **Status:** `docker-compose.yml` and `Dockerfile` do not exist yet. The configuration below is the target.
+### Starting & stopping
 
-Create **`docker-compose.yml`** at the repo root:
-
-```yaml
-version: "3.9"
-
-services:
-  db:
-    image: mysql:8.0
-    container_name: expense_tracker_mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: root_pw   # change before any production use
-      MYSQL_DATABASE: expense_tracker
-      MYSQL_USER: et_user
-      MYSQL_PASSWORD: et_pw
-    volumes:
-      - db_data:/var/lib/mysql
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
-    ports:
-      - "3306:3306"   # will clash if you already run MySQL locally
-
-  web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      - db
-
-volumes:
-  db_data:
+```bash
+docker compose up -d          # start MySQL + Django in the background
+docker compose logs -f web    # tail the Django logs
+docker compose down           # stop containers (data preserved)
 ```
 
-Create **`Dockerfile`**:
+### Resetting the database
 
-```dockerfile
-FROM python:3.14-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
+```bash
+docker compose down -v        # ⚠️ deletes ALL data in the db_data volume
+docker compose up -d          # re-creates the empty database
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed_categories
 ```
 
-**Notes:**
-- The `env_file: .env` line makes Compose inject your variables into the `web` container.
-- `schema.sql` is mounted into `/docker-entrypoint-initdb.d/` so MySQL auto-imports it on first run.
-- The init script **only runs when the volume is empty**. To re-import, run `docker compose down -v && docker compose up -d db`.
+### Running Django commands inside the container
 
-> **⚠️ Warning:** `docker compose down -v` deletes **all** data in the `db_data` volume, not just the schema import.
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed_categories
+docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py test
+```
 
-**DB_HOST context:**
-- Running Django on the host (`python manage.py runserver`): set `DB_HOST=127.0.0.1` in `.env`
-- Running Django inside the Docker stack (`docker compose up web`): set `DB_HOST=db` in `.env`
+### DB_HOST context
+
+| Where Django runs | `DB_HOST` value |
+|-------------------|-----------------|
+| Inside Docker (`docker compose up web`) | `db` (the service name) |
+| On the host (`python manage.py runserver`) | `127.0.0.1` |
 
 ---
 
-## 4️⃣ Railway deployment (NOT YET CREATED)
+## 3️⃣ SQLite fallback (quick local testing)
 
-> **Status:** `Procfile`, `gunicorn`, and `whitenoise` are not yet added. See the separate [railway_deployment_readiness_plan.md](file:///Users/samuelhernandez/.gemini/antigravity-cli/brain/7c41552e-9f4d-43e0-b765-c015b36e7fe3/railway_deployment_readiness_plan.md) for the full plan.
+If you don't want MySQL at all, set this in your `.env`:
+
+```dotenv
+DB_ENGINE=sqlite
+```
+
+Django will use `db.sqlite3` in the project root. No Docker or MySQL needed.
+
+---
+
+## 4️⃣ Railway deployment
+
+> **Status:** Not yet configured. See the separate deployment readiness plan for details.
 
 ---
 
@@ -171,6 +178,7 @@ COPY . .
 
 - **`.env` must never be committed** — it's already in `.gitignore`.
 - **Port clash** — the Docker compose file publishes MySQL on host port 3306. Stop any local MySQL or change the port mapping.
-- **Re-importing schema** — after the first Docker run, the volume holds the data. Use `docker compose down -v` to wipe it for a fresh start (destroys all local data).
-- **`schema.sql` vs migrations** — `schema.sql` is a reference DDL. Django migrations are the canonical source of truth. Running `python manage.py migrate` after importing `schema.sql` is safe; Django will detect existing tables via the `django_migrations` table.
-- **SQLite fallback** — set `DB_ENGINE=sqlite` in `.env` to skip MySQL entirely (useful for quick local testing).
+- **Persistent data** — stopping the stack preserves the database volume. Run migrations after pulling changes. Use `docker compose down -v` only when you intend to delete all local database data.
+- **`schema.sql` vs migrations** — Django migrations are the canonical source of truth. Do not import the reference SQL before migrations: it requires Django's `auth_user` table and does not record migration history. Compose deliberately leaves schema creation to `migrate`.
+- **Local use only** — both published ports bind to `127.0.0.1`. The Django dev server is for local testing, not deployment. Keep generated database passwords only in your ignored `.env`.
+- **Existing volumes** — MySQL only creates the configured database and users on first initialization. Editing `.env` passwords does not update existing MySQL accounts; update those accounts to match before restarting. A disposable database can instead be reset using the commands above; back up any data you need first.
