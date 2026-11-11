@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS tracker_category (
 -- 2. Transaction Table
 CREATE TABLE IF NOT EXISTS tracker_transaction (
     id          BIGINT         AUTO_INCREMENT PRIMARY KEY,
-    user_id     BIGINT         NOT NULL,
+    user_id     INT            NOT NULL,
     category_id BIGINT         NOT NULL,
     amount      DECIMAL(10, 2) NOT NULL,
     note        VARCHAR(255)   NULL,
