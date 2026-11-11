@@ -193,7 +193,10 @@ def get_filtered_transactions(user_id, category_id=None, start_date=None, end_da
         search_term = search.strip()
         if search_term:
             escaped_term = connection.ops.prep_for_like_query(search_term)
-            sql += r" AND t.note LIKE %s ESCAPE '\'"
+            if connection.vendor == 'sqlite':
+                sql += r" AND t.note LIKE %s ESCAPE '\'"
+            else:
+                sql += " AND t.note LIKE %s"
             params.append(f"%{escaped_term}%")
 
     sql += " ORDER BY t.tx_date DESC, t.id DESC"
