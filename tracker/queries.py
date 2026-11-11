@@ -147,3 +147,74 @@ def get_recent_transactions(user_id, limit=5):
         })
 
     return recent
+
+def get_filtered_transactions(user_id, category_id=None, start_date=None, end_date=None, search=None):
+    """
+    Executes a parameterized raw SQL query retrieving all transactions for a user
+    matching optional filter parameters (category, date range, substring search in note).
+
+    Args:
+        user_id (int): Primary key of the authenticated User.
+        category_id (int|str|None): Optional category ID to filter on.
+        start_date (date|str|None): Optional inclusive start date.
+        end_date (date|str|None): Optional inclusive end date.
+        search (str|None): Optional search string to match within notes.
+
+    Returns:
+        list[dict]: List of matching transaction dictionaries ordered by tx_date DESC, id DESC.
+    """
+    sql = """
+        SELECT t.id,
+               t.amount,
+               t.tx_date,
+               t.note,
+               c.id AS category_id,
+               c.name AS category_name,
+               c.color AS category_color
+        FROM tracker_transaction t
+        INNER JOIN tracker_category c ON t.category_id = c.id
+        WHERE t.user_id = %s
+    """
+    params = [user_id]
+
+    if category_id:
+        sql += " AND t.category_id = %s"
+        params.append(category_id)
+
+    if start_date:
+        sql += " AND t.tx_date >= %s"
+        params.append(start_date)
+
+    if end_date:
+        sql += " AND t.tx_date <= %s"
+        params.append(end_date)
+
+    if search:
+        search_term = search.strip()
+        if search_term:
+            escaped_term = connection.ops.prep_for_like_query(search_term)
+            if connection.vendor == 'sqlite':
+                sql += r" AND t.note LIKE %s ESCAPE '\'"
+            else:
+                sql += " AND t.note LIKE %s"
+            params.append(f"%{escaped_term}%")
+
+    sql += " ORDER BY t.tx_date DESC, t.id DESC"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+    transactions = []
+    for row in rows:
+        transactions.append({
+            'id': row[0],
+            'amount': _money(row[1]),
+            'tx_date': row[2],
+            'note': row[3],
+            'category_id': row[4],
+            'category_name': row[5],
+            'category_color': row[6],
+        })
+
+    return transactions
