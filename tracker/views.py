@@ -121,8 +121,11 @@ def transaction_history_view(request):
     search_param = request.GET.get('q', '').strip()
 
     category_id = None
-    if category_param.isdigit():
-        category_id = int(category_param)
+    if category_param.isascii() and category_param.isdigit() and len(category_param) <= 10:
+        try:
+            category_id = int(category_param)
+        except (ValueError, OverflowError):
+            category_id = None
 
     start_date = None
     end_date = None

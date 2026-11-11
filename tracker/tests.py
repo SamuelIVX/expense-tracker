@@ -790,6 +790,33 @@ class TransactionHistoryViewTests(TestCase):
         self.assertContains(response, "Whole Foods salad")
         self.assertNotContains(response, "Subway ticket")
 
+    def test_history_filter_by_search_query_escapes_like_wildcards(self):
+        """Search query properly escapes LIKE wildcards like % to prevent broad matches."""
+        Transaction.objects.create(
+            user=self.user, category=self.cat_food, amount=Decimal('10.00'), tx_date=date(2026, 11, 1), note="50% off coupon"
+        )
+        Transaction.objects.create(
+            user=self.user, category=self.cat_food, amount=Decimal('20.00'), tx_date=date(2026, 11, 2), note="500 dollars spent"
+        )
+
+        self.client.force_login(self.user)
+        # Search specifically for term containing '%'
+        response = self.client.get(f"{reverse('transaction_history')}?q=50%")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtered_count'], 1)
+        self.assertEqual(response.context['filtered_total'], Decimal('10.00'))
+        self.assertContains(response, "50% off coupon")
+        self.assertNotContains(response, "500 dollars spent")
+
+    def test_history_filter_by_non_ascii_digit_category_handled(self):
+        """Passing non-ASCII digits like ² or invalid formats returns HTTP 200 without crashing."""
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('10.00'), tx_date=date(2026, 11, 1))
+
+        self.client.force_login(self.user)
+        for weird_param in ['²', '①', '99999999999999999999999999999999']:
+            response = self.client.get(f"{reverse('transaction_history')}?category={quote(weird_param)}")
+            self.assertEqual(response.status_code, 200)
+
     def test_history_pagination_and_query_preservation(self):
         """Pagination breaks lists into 15 items per page and preserves filter query params in links."""
         today = timezone.localdate()
