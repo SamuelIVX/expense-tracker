@@ -3,11 +3,125 @@
 {% block title %}Transaction History — Expense Tracker{% endblock %}
 
 {% block content %}
-<div class="et-page-header">
-    <h1 class="et-card__title" style="font-size: 1.5rem; margin-bottom: var(--et-space-sm);">Transaction History</h1>
-    <p style="color: var(--et-text-muted); margin-bottom: var(--et-space-lg);">View and filter your recorded expenses.</p>
+<div class="et-card__header" style="border: none; padding-bottom: 0; margin-bottom: var(--et-space-lg);">
+    <div>
+        <h1 class="et-card__title" style="font-size: 1.75rem;">Transaction History</h1>
+        <p style="color: var(--et-text-muted); margin-top: var(--et-space-xs); margin-bottom: 0;">Search, filter, and review all recorded expenses</p>
+    </div>
+    <div>
+        <a href="{% url 'add_transaction' %}" class="et-btn et-btn--primary">+ Add Expense</a>
+    </div>
 </div>
-<div class="et-card">
-    <p style="margin: 0; color: var(--et-text-muted);">Transaction filtering and history records will be active shortly.</p>
+
+<!-- Filters Card -->
+<div class="et-card et-filter-card">
+    <form method="get" action="{% url 'transaction_history' %}" class="et-filter-bar">
+        <div class="et-filter-group">
+            <label for="id_filter_category" class="et-label">Category</label>
+            <select name="category" id="id_filter_category" class="et-select">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if selected_category == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="et-filter-group">
+            <label for="id_filter_month" class="et-label">Month</label>
+            <input type="month" name="month" id="id_filter_month" value="{{ selected_month }}" class="et-input">
+        </div>
+
+        <div class="et-filter-group" style="flex: 2 1 240px;">
+            <label for="id_filter_search" class="et-label">Search Description</label>
+            <input type="text" name="q" id="id_filter_search" value="{{ search_query }}" placeholder="Filter description notes..." class="et-input">
+        </div>
+
+        <div class="et-filter-actions">
+            <button type="submit" class="et-btn et-btn--primary">Apply</button>
+            {% if selected_category or selected_month or search_query %}
+                <a href="{% url 'transaction_history' %}" class="et-btn et-btn--secondary">Reset</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Summary Meta Bar -->
+<div class="et-meta-bar">
+    <span>Showing <strong>{{ filtered_count }}</strong> transaction{{ filtered_count|pluralize }}</span>
+    <span>Total: <strong style="color: var(--et-primary); font-size: 1.1rem;">${{ filtered_total|floatformat:2 }}</strong></span>
+</div>
+
+<!-- Transactions Table -->
+<div class="et-card" style="padding: 0; overflow: hidden;">
+    {% if page_obj.object_list %}
+        <div class="et-table-responsive" style="margin-bottom: 0;">
+            <table class="et-table">
+                <thead>
+                    <tr>
+                        <th scope="col" style="width: 140px;">Date</th>
+                        <th scope="col" style="width: 180px;">Category</th>
+                        <th scope="col">Description</th>
+                        <th scope="col" style="text-align: right; width: 140px;">Amount</th>
+                        <th scope="col" style="text-align: center; width: 100px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in page_obj.object_list %}
+                        <tr>
+                            <td style="color: var(--et-text-muted); font-size: 0.9rem;">{{ tx.tx_date }}</td>
+                            <td>
+                                <span class="et-badge">
+                                    <span class="et-badge__dot" style="background-color: {{ tx.category_color }};"></span>
+                                    {{ tx.category_name }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if tx.note %}
+                                    {{ tx.note }}
+                                {% else %}
+                                    <span style="color: var(--et-text-muted); font-style: italic;">No description</span>
+                                {% endif %}
+                            </td>
+                            <td style="text-align: right; font-weight: 600; font-size: 1rem;">
+                                ${{ tx.amount|floatformat:2 }}
+                            </td>
+                            <td style="text-align: center;">
+                                <form method="post" action="{% url 'delete_transaction' tx.id %}" onsubmit="return confirm('Are you sure you want to delete this expense?');" style="margin: 0; display: inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="et-btn et-btn--danger et-btn--sm" aria-label="Delete {{ tx.category_name }} transaction on {{ tx.tx_date }} for ${{ tx.amount }}">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+            <nav class="et-pagination" aria-label="Transaction pagination" style="padding: var(--et-space-md);">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}{% if preserved_query %}&{{ preserved_query }}{% endif %}" class="et-btn et-btn--secondary et-btn--sm">&larr; Previous</a>
+                {% endif %}
+                <span style="color: var(--et-text-muted);">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if preserved_query %}&{{ preserved_query }}{% endif %}" class="et-btn et-btn--secondary et-btn--sm">Next &rarr;</a>
+                {% endif %}
+            </nav>
+        {% endif %}
+    {% else %}
+        <div class="et-empty-state">
+            {% if selected_category or selected_month or search_query %}
+                <p style="margin-bottom: var(--et-space-sm);">No transactions matched your selected filters.</p>
+                <a href="{% url 'transaction_history' %}" class="et-btn et-btn--secondary et-btn--sm">Clear Filters</a>
+            {% else %}
+                <p style="margin-bottom: var(--et-space-sm);">No transactions recorded yet.</p>
+                <a href="{% url 'add_transaction' %}" class="et-btn et-btn--primary et-btn--sm">Log Your First Expense</a>
+            {% endif %}
+        </div>
+    {% endif %}
 </div>
 {% endblock %}

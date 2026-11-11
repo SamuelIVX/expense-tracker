@@ -3,20 +3,24 @@ Views for the tracker application.
 """
 
 import calendar
+from datetime import date
 from decimal import Decimal
-from django.http import HttpResponse
-from django.shortcuts import render, redirect
+from django.core.paginator import Paginator
+from django.http import HttpResponse, HttpResponseNotAllowed
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from .models import Category, Transaction
 from .forms import RegisterForm, TransactionForm
 from .constants import DEFAULT_MONTHLY_BUDGET
 from .queries import (
     get_monthly_spending_summary,
     get_monthly_category_breakdown,
     get_recent_transactions,
+    get_filtered_transactions,
 )
 
 def index(request):
@@ -108,8 +112,85 @@ def add_transaction_view(request):
 
 @login_required
 def transaction_history_view(request):
-    """Protected view for transaction history (full filters implemented in Spec 07)."""
-    return render(request, 'tracker/history.html')
+    """
+    Renders filterable and paginated list of transactions for the authenticated user.
+    Supports filtering by category, calendar month, and substring search on notes.
+    """
+    category_param = request.GET.get('category', '').strip()
+    month_param = request.GET.get('month', '').strip()
+    search_param = request.GET.get('q', '').strip()
+
+    category_id = None
+    if category_param.isdigit():
+        category_id = int(category_param)
+
+    start_date = None
+    end_date = None
+    if month_param:
+        try:
+            parts = month_param.split('-')
+            if len(parts) == 2:
+                year = int(parts[0])
+                month_num = int(parts[1])
+                if 1 <= month_num <= 12 and 1900 <= year <= 2100:
+                    _, last_day = calendar.monthrange(year, month_num)
+                    start_date = date(year, month_num, 1)
+                    end_date = date(year, month_num, last_day)
+        except (ValueError, TypeError):
+            start_date = None
+            end_date = None
+
+    transactions = get_filtered_transactions(
+        user_id=request.user.id,
+        category_id=category_id,
+        start_date=start_date,
+        end_date=end_date,
+        search=search_param if search_param else None,
+    )
+
+    filtered_count = len(transactions)
+    filtered_total = sum((t['amount'] for t in transactions), Decimal('0.00'))
+
+    # Paginate results at 15 items per page
+    paginator = Paginator(transactions, 15)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    # Preserve active filter parameters across pagination links
+    query_dict = request.GET.copy()
+    if 'page' in query_dict:
+        del query_dict['page']
+    preserved_query = query_dict.urlencode()
+
+    categories = Category.objects.all().order_by('name')
+
+    context = {
+        'page_obj': page_obj,
+        'categories': categories,
+        'filtered_count': filtered_count,
+        'filtered_total': filtered_total,
+        'selected_category': category_id,
+        'selected_month': month_param,
+        'search_query': search_param,
+        'preserved_query': preserved_query,
+    }
+    return render(request, 'tracker/history.html', context)
+
+@login_required
+def delete_transaction_view(request, pk):
+    """
+    Safely deletes a transaction owned by the authenticated user via POST.
+    Prevents unauthorized deletion of transactions belonging to other users.
+    """
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    tx = get_object_or_404(Transaction, pk=pk, user=request.user)
+    amount = tx.amount
+    category_name = tx.category.name
+    tx.delete()
+    messages.success(request, f"Deleted expense of ${amount:.2f} for {category_name}.")
+    return redirect('transaction_history')
 
 def register_view(request):
     """

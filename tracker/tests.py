@@ -702,3 +702,163 @@ class DashboardViewTests(TestCase):
         self.assertEqual(len(recent), 5)
         self.assertEqual(recent[0]['note'], "Tx #7")
         self.assertEqual(recent[4]['note'], "Tx #3")
+
+class TransactionHistoryViewTests(TestCase):
+    """Verifies Spec 07 Transaction History: filtering, searching, pagination, and safe deletion."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="histuser", password="ValidPass123!")
+        self.other_user = User.objects.create_user(username="otherhistuser", password="ValidPass123!")
+        self.cat_food = Category.objects.create(name="Food", color="#FF5733")
+        self.cat_transport = Category.objects.create(name="Transport", color="#33A8FF")
+
+    def test_unauthenticated_user_redirected_to_login(self):
+        """Anonymous access to history or delete endpoint redirects to login."""
+        response = self.client.get(reverse('transaction_history'))
+        self.assertRedirects(response, f"{reverse('login')}?next={reverse('transaction_history')}", fetch_redirect_response=False)
+
+        delete_url = reverse('delete_transaction', kwargs={'pk': 1})
+        response_delete = self.client.post(delete_url)
+        self.assertRedirects(response_delete, f"{reverse('login')}?next={delete_url}", fetch_redirect_response=False)
+
+    def test_history_empty_state_for_user_with_no_records(self):
+        """User with no transactions sees empty state without table."""
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('transaction_history'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'tracker/history.html')
+        self.assertEqual(response.context['filtered_count'], 0)
+        self.assertEqual(response.context['filtered_total'], Decimal('0.00'))
+        self.assertContains(response, "No transactions recorded yet")
+
+    def test_history_isolates_user_data(self):
+        """User sees only their own transactions and not other users' transactions."""
+        today = timezone.localdate()
+        tx_user = Transaction.objects.create(
+            user=self.user, category=self.cat_food, amount=Decimal('42.00'), tx_date=today, note="My lunch"
+        )
+        tx_other = Transaction.objects.create(
+            user=self.other_user, category=self.cat_food, amount=Decimal('99.00'), tx_date=today, note="Other lunch"
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('transaction_history'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtered_count'], 1)
+        self.assertEqual(response.context['filtered_total'], Decimal('42.00'))
+        self.assertContains(response, "My lunch")
+        self.assertNotContains(response, "Other lunch")
+
+    def test_history_filter_by_category(self):
+        """Filtering by category returns only matching category records and recalculates total."""
+        today = timezone.localdate()
+        Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('25.00'), tx_date=today)
+        Transaction.objects.create(user=self.user, category=self.cat_transport, amount=Decimal('15.00'), tx_date=today)
+
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('transaction_history')}?category={self.cat_food.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtered_count'], 1)
+        self.assertEqual(response.context['filtered_total'], Decimal('25.00'))
+        transactions = list(response.context['page_obj'])
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['category_name'], "Food")
+
+    def test_history_filter_by_month(self):
+        """Filtering by month returns only transactions inside that calendar month."""
+        t1 = Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('30.00'), tx_date=date(2026, 11, 10))
+        t2 = Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('40.00'), tx_date=date(2026, 10, 15))
+
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('transaction_history')}?month=2026-11")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtered_count'], 1)
+        self.assertEqual(response.context['filtered_total'], Decimal('30.00'))
+        transactions = list(response.context['page_obj'])
+        self.assertEqual(transactions[0]['id'], t1.id)
+
+    def test_history_filter_by_search_query(self):
+        """Filtering by search string matches substrings inside the transaction note."""
+        t1 = Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('10.00'), tx_date=date(2026, 11, 1), note="Whole Foods salad")
+        t2 = Transaction.objects.create(user=self.user, category=self.cat_food, amount=Decimal('20.00'), tx_date=date(2026, 11, 2), note="Subway ticket")
+
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('transaction_history')}?q=foods")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtered_count'], 1)
+        self.assertEqual(response.context['filtered_total'], Decimal('10.00'))
+        self.assertContains(response, "Whole Foods salad")
+        self.assertNotContains(response, "Subway ticket")
+
+    def test_history_pagination_and_query_preservation(self):
+        """Pagination breaks lists into 15 items per page and preserves filter query params in links."""
+        today = timezone.localdate()
+        for i in range(1, 19):
+            Transaction.objects.create(
+                user=self.user,
+                category=self.cat_food,
+                amount=Decimal('10.00'),
+                tx_date=today,
+                note=f"Item {i}"
+            )
+
+        self.client.force_login(self.user)
+        # Page 1
+        response_p1 = self.client.get(f"{reverse('transaction_history')}?category={self.cat_food.id}")
+        self.assertEqual(response_p1.status_code, 200)
+        page1 = response_p1.context['page_obj']
+        self.assertEqual(len(page1), 15)
+        self.assertTrue(page1.has_next())
+        self.assertEqual(response_p1.context['filtered_count'], 18)
+        self.assertEqual(response_p1.context['filtered_total'], Decimal('180.00'))
+        self.assertContains(response_p1, f'category={self.cat_food.id}')
+
+        # Page 2
+        response_p2 = self.client.get(f"{reverse('transaction_history')}?page=2&category={self.cat_food.id}")
+        self.assertEqual(response_p2.status_code, 200)
+        page2 = response_p2.context['page_obj']
+        self.assertEqual(len(page2), 3)
+        self.assertTrue(page2.has_previous())
+
+    def test_delete_transaction_post_success(self):
+        """POST to delete removes the record, flashes confirmation message, and redirects."""
+        today = timezone.localdate()
+        tx = Transaction.objects.create(
+            user=self.user, category=self.cat_food, amount=Decimal('55.00'), tx_date=today, note="Dinner"
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('delete_transaction', kwargs={'pk': tx.id}), follow=True)
+        self.assertRedirects(response, reverse('transaction_history'))
+        self.assertFalse(Transaction.objects.filter(pk=tx.id).exists())
+        self.assertContains(response, "Deleted expense of $55.00 for Food.")
+
+    def test_delete_transaction_get_rejected_with_405(self):
+        """GET request to delete endpoint is rejected with HTTP 405 Method Not Allowed."""
+        today = timezone.localdate()
+        tx = Transaction.objects.create(
+            user=self.user, category=self.cat_food, amount=Decimal('55.00'), tx_date=today
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('delete_transaction', kwargs={'pk': tx.id}))
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Transaction.objects.filter(pk=tx.id).exists())
+
+    def test_delete_transaction_prevents_unauthorized_deletion_of_other_users(self):
+        """Attempting to delete another user's transaction returns HTTP 404 without deleting."""
+        today = timezone.localdate()
+        other_tx = Transaction.objects.create(
+            user=self.other_user, category=self.cat_food, amount=Decimal('88.00'), tx_date=today
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('delete_transaction', kwargs={'pk': other_tx.id}))
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Transaction.objects.filter(pk=other_tx.id).exists())
+
+    def test_delete_nonexistent_transaction_returns_404(self):
+        """Attempting to delete a nonexistent transaction returns HTTP 404."""
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('delete_transaction', kwargs={'pk': 99999}))
+        self.assertEqual(response.status_code, 404)
