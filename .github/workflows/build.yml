@@ -19,6 +19,30 @@ jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      DEBUG: "True"
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: expense_tracker
+      DB_USER: root
+      DB_PASSWORD: root
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: expense_tracker
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=30s
 
     steps:
       - name: Checkout Code
@@ -38,13 +62,10 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Django System Check
-        env:
-          SECRET_KEY: ci-test-secret-key-not-for-production
-          DEBUG: "True"
         run: python manage.py check
 
+      - name: Apply Migrations (Exercise Database)
+        run: python manage.py migrate
+
       - name: Run Tests
-        env:
-          SECRET_KEY: ci-test-secret-key-not-for-production
-          DEBUG: "True"
         run: python -m pytest
