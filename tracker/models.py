@@ -1,12 +1,46 @@
 """
 Models for the tracker application.
-Defines Category and Transaction relational entities.
+Defines Category, Transaction, and UserProfile relational entities.
 """
 
 from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+
+
+class UserProfile(models.Model):
+    """
+    User settings and profile preferences including customized monthly budget.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    monthly_budget = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('1000.00'),
+        validators=[
+            MinValueValidator(Decimal('0.01'), message="Budget must be at least $0.01."),
+            MaxValueValidator(Decimal('999999.99'), message="Budget cannot exceed $999,999.99."),
+        ]
+    )
+
+    class Meta:
+        verbose_name = 'user profile'
+        verbose_name_plural = 'user profiles'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(monthly_budget__gt=0, monthly_budget__lte=Decimal('999999.99')),
+                name='chk_profile_budget_pos'
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile (Budget: ${self.monthly_budget:.2f})"
+
 
 class Category(models.Model):
     """

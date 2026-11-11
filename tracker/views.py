@@ -3,9 +3,11 @@ Views for the tracker application.
 """
 
 import calendar
+import csv
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import render, redirect, get_object_or_404
@@ -14,7 +16,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from .models import Category, Transaction
+from .models import Category, Transaction, UserProfile
 from .forms import RegisterForm, TransactionForm
 from .constants import DEFAULT_MONTHLY_BUDGET
 from .queries import (
@@ -26,12 +28,12 @@ from .queries import (
 
 def index(request):
     """
-    Smoke-test endpoint verifying server responsiveness.
-
-    Returns:
-        HttpResponse: HTTP 200 with text payload.
+    Root endpoint. Redirects authenticated users to the dashboard and
+    unauthenticated visitors to the login page.
     """
-    return HttpResponse("Expense Tracker — up.", status=200)
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    return redirect('login')
 
 @login_required
 def dashboard_view(request):
@@ -67,7 +69,11 @@ def dashboard_view(request):
     category_breakdown_json = json.dumps(category_breakdown_data)
     recent_transactions = get_recent_transactions(user_id, limit=5)
 
-    budget = DEFAULT_MONTHLY_BUDGET
+    profile, _ = UserProfile.objects.get_or_create(
+        user=request.user,
+        defaults={'monthly_budget': DEFAULT_MONTHLY_BUDGET}
+    )
+    budget = profile.monthly_budget
     if budget > 0:
         budget_ratio = (total_spent / budget) * Decimal('100')
     else:
@@ -102,6 +108,105 @@ def dashboard_view(request):
         'recent_transactions': recent_transactions,
     }
     return render(request, 'tracker/dashboard.html', context)
+
+@login_required
+def update_budget_view(request):
+    """
+    Updates the authenticated user's monthly budget benchmark via POST.
+    Rejects non-numeric, negative, zero, or sub-cent fractional values.
+    """
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    raw_budget = request.POST.get('monthly_budget', '').strip()
+    try:
+        new_budget = Decimal(raw_budget)
+        if new_budget.as_tuple().exponent < -2:
+            raise ValidationError("Budget cannot have fractional cents beyond two decimal places.")
+        if new_budget <= Decimal('0.00') or new_budget > Decimal('999999.99'):
+            raise ValidationError("Budget must be between $0.01 and $999,999.99.")
+    except (InvalidOperation, ValidationError, TypeError, ValueError):
+        messages.error(request, "Please enter a valid monthly budget amount between $0.01 and $999,999.99.")
+        return redirect('dashboard')
+
+    profile, _ = UserProfile.objects.get_or_create(
+        user=request.user,
+        defaults={'monthly_budget': DEFAULT_MONTHLY_BUDGET}
+    )
+    profile.monthly_budget = new_budget
+    profile.save()
+    messages.success(request, f"Monthly budget successfully updated to ${new_budget:.2f}.")
+    return redirect('dashboard')
+
+def _sanitize_csv_cell(value):
+    """
+    Prevents CSV / Formula injection attacks (CWE-1236 / OWASP ASVS).
+    If a cell value starts with '=', '+', '-', '@', tab, or carriage return,
+    prepends a single quote to prevent spreadsheet formula execution.
+    """
+    if value is None:
+        return ''
+    str_val = str(value)
+    if str_val.startswith(('=', '+', '-', '@', '\t', '\r')):
+        return f"'{str_val}"
+    return str_val
+
+@login_required
+def export_transactions_csv_view(request):
+    """
+    Exports filtered or complete transaction history for the authenticated user as a downloadable CSV.
+    Respects active category, month, and search query filters, with CSV formula injection protection.
+    """
+    category_param = request.GET.get('category', '').strip()
+    month_param = request.GET.get('month', '').strip()
+    search_param = request.GET.get('q', '').strip()
+
+    category_id = None
+    if category_param.isascii() and category_param.isdigit() and len(category_param) <= 10:
+        try:
+            category_id = int(category_param)
+        except (ValueError, OverflowError):
+            category_id = None
+
+    start_date = None
+    end_date = None
+    if month_param:
+        try:
+            parts = month_param.split('-')
+            if len(parts) == 2:
+                year = int(parts[0])
+                month_num = int(parts[1])
+                if 1 <= month_num <= 12 and 1900 <= year <= 2100:
+                    _, last_day = calendar.monthrange(year, month_num)
+                    start_date = date(year, month_num, 1)
+                    end_date = date(year, month_num, last_day)
+        except (ValueError, TypeError):
+            start_date = None
+            end_date = None
+
+    transactions = get_filtered_transactions(
+        user_id=request.user.id,
+        category_id=category_id,
+        start_date=start_date,
+        end_date=end_date,
+        search=search_param if search_param else None,
+    )
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="transactions.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Date', 'Category', 'Amount', 'Description'])
+
+    for tx in transactions:
+        writer.writerow([
+            tx['tx_date'].strftime('%Y-%m-%d'),
+            _sanitize_csv_cell(tx['category_name']),
+            f"{tx['amount']:.2f}",
+            _sanitize_csv_cell(tx['note']),
+        ])
+
+    return response
 
 @login_required
 def add_transaction_view(request):

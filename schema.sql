@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS tracker_transaction (
     CONSTRAINT chk_amount_pos CHECK (amount > 0.00 AND amount <= 999999.99)
 ) ENGINE=InnoDB;
 
+-- 3. User Profile Table (Customizable Monthly Budget)
+CREATE TABLE IF NOT EXISTS tracker_userprofile (
+    id             BIGINT         AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT            NOT NULL UNIQUE,
+    monthly_budget DECIMAL(10, 2) NOT NULL DEFAULT 1000.00,
+    CONSTRAINT fk_profile_user FOREIGN KEY (user_id) REFERENCES auth_user(id) ON DELETE CASCADE,
+    CONSTRAINT chk_profile_budget_pos CHECK (monthly_budget > 0.00 AND monthly_budget <= 999999.99)
+) ENGINE=InnoDB;
+
 -- Seed Categories (Fixed set for v1, mirrors tracker/constants.py)
 INSERT INTO tracker_category (name, color) VALUES
     ('Food',          '#FF5733'),

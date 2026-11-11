@@ -23,7 +23,31 @@
     </div>
 
     <div class="et-stat">
-        <div class="et-stat__label">Monthly Budget Benchmark</div>
+        <div class="et-stat__label et-stat__label--split">
+            <span>Monthly Budget</span>
+            <details class="et-budget-dropdown">
+                <summary class="et-budget-summary" aria-label="Edit monthly budget" title="Edit monthly budget">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>Edit</span>
+                </summary>
+                <div class="et-budget-popover">
+                    <form action="{% url 'update_budget' %}" method="post" class="et-budget-form">
+                        {% csrf_token %}
+                        <div class="et-budget-field">
+                            <label for="id_monthly_budget" class="et-budget-label">Monthly Target ($)</label>
+                            <div class="et-budget-input-wrapper">
+                                <span class="et-budget-prefix">$</span>
+                                <input type="number" step="0.01" min="0.01" max="999999.99" name="monthly_budget" id="id_monthly_budget" value="{{ budget|unlocalize }}" class="et-input et-input--sm" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="et-btn et-btn--primary et-btn--sm et-budget-submit-btn">Save Target</button>
+                    </form>
+                </div>
+            </details>
+        </div>
         <div class="et-stat__value">${{ budget|floatformat:2 }}</div>
         <p class="et-stat__subtext">Target baseline</p>
     </div>
@@ -175,8 +199,17 @@
         const canvas = document.getElementById('categoryChart');
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        
-        new Chart(ctx, {
+
+        function getThemeColors() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            return {
+                tickColor: isDark ? '#94A3B8' : '#64748B',
+                gridColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+            };
+        }
+
+        const colors = getThemeColors();
+        const chart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: rawData.map(item => item.name),
@@ -206,11 +239,35 @@
                     x: {
                         beginAtZero: true,
                         ticks: {
+                            color: colors.tickColor,
                             callback: value => '$' + Number(value).toFixed(2)
+                        },
+                        grid: {
+                            color: colors.gridColor
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: colors.tickColor
+                        },
+                        grid: {
+                            display: false
                         }
                     }
                 }
             }
+        });
+
+        window.addEventListener('themechanged', function () {
+            const updated = getThemeColors();
+            if (chart.options.scales.x) {
+                chart.options.scales.x.ticks.color = updated.tickColor;
+                chart.options.scales.x.grid.color = updated.gridColor;
+            }
+            if (chart.options.scales.y) {
+                chart.options.scales.y.ticks.color = updated.tickColor;
+            }
+            chart.update();
         });
     });
 </script>
