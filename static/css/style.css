@@ -105,10 +105,10 @@
     --et-warn-border: rgba(251, 191, 36, 0.28);
     --et-warn-text: #FDE68A;
 
-    --et-danger: #F87171;
-    --et-danger-bg: rgba(248, 113, 113, 0.14);
-    --et-danger-border: rgba(248, 113, 113, 0.28);
-    --et-danger-text: #FCA5A5;
+    --et-danger: #C53030; /* Darker red for better contrast */
+    --et-danger-bg: rgba(197, 48, 48, 0.14);
+    --et-danger-border: rgba(197, 48, 48, 0.28);
+    --et-danger-text: #FFFFFF;
 
     --et-info: #38BDF8;
     --et-info-bg: rgba(56, 189, 248, 0.14);

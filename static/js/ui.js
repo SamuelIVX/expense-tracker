@@ -126,6 +126,20 @@
                 forms.forEach(function (form) {
                     resetButtonState(form);
                 });
+                // Reapply theme from persisted storage on back/forward navigation
+                var storedTheme = null;
+                try { storedTheme = localStorage.getItem('et-theme'); } catch (e) {}
+                var systemPrefersDark = false;
+                try { systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) {}
+                var theme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', theme);
+                // Update toggle button ARIA and title if present
+                var toggleBtn = document.getElementById('theme-toggle');
+                if (toggleBtn) {
+                    var isDark = theme === 'dark';
+                    toggleBtn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+                    toggleBtn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+                }
             }
         });
     }
